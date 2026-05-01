@@ -3,84 +3,70 @@ import { Shield, Clock, AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function CancellationPolicy() {
   return (
-    <div className="flex-1 py-12 px-4 sm:px-6 max-w-3xl mx-auto w-full animate-fade-in">
-      <div className="text-center mb-10">
-        <div className="w-16 h-16 bg-primary-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <Shield size={32} className="text-primary-800" />
-        </div>
-        <h1 className="section-title text-3xl">Política de Cancelamento</h1>
-        <p className="section-subtitle">Dom Concept – Imperatriz, MA</p>
+    <div className="flex-1 pt-24 pb-16 px-6 max-w-3xl mx-auto w-full animate-fade-in">
+      <div className="text-center mb-12">
+        <p className="section-subtitle mb-3">Política</p>
+        <h1 className="section-title text-3xl">Cancelamento</h1>
+        <p className="text-brand-400 text-sm mt-2">Dom Concept – Imperatriz, MA</p>
       </div>
 
-      <div className="space-y-6">
-        <PolicySection
-          icon={<Clock size={20} className="text-primary-600" />}
-          title="Prazo para Cancelamento"
-          color="bg-primary-50 border-primary-200"
-        >
-          <p>Os cancelamentos devem ser realizados com <strong>no mínimo 2 (duas) horas de antecedência</strong> do horário agendado.</p>
-          <p className="mt-2">Cancelamentos feitos fora desse prazo podem resultar em cobrança parcial do serviço.</p>
-        </PolicySection>
-
-        <PolicySection
-          icon={<CheckCircle size={20} className="text-green-600" />}
-          title="Como Cancelar"
-          color="bg-green-50 border-green-200"
-        >
-          <ul className="space-y-2">
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 mt-0.5">✓</span>
-              <span>Entre em contato pelo WhatsApp: <strong>+55 99 98462-6896</strong></span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 mt-0.5">✓</span>
-              <span>Informe seu nome, horário e serviço agendado</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 mt-0.5">✓</span>
-              <span>Aguarde a confirmação do cancelamento</span>
-            </li>
-          </ul>
-        </PolicySection>
-
-        <PolicySection
-          icon={<AlertCircle size={20} className="text-amber-600" />}
-          title="Reagendamentos"
-          color="bg-amber-50 border-amber-200"
-        >
-          <p>Reagendamentos são bem-vindos e podem ser solicitados pelo WhatsApp com antecedência mínima de <strong>2 horas</strong>.</p>
-          <p className="mt-2">Estamos sempre abertos a encontrar o melhor horário para você.</p>
-        </PolicySection>
-
-        <PolicySection
-          icon={<Shield size={20} className="text-blue-600" />}
-          title="Compromisso do Dom Concept"
-          color="bg-blue-50 border-blue-200"
-        >
-          <p>Valorizamos seu tempo. Em caso de imprevistos de nossa parte, entraremos em contato o mais breve possível para reagendar sem custos adicionais.</p>
-          <p className="mt-2">Sua satisfação é nossa prioridade.</p>
-        </PolicySection>
+      <div className="space-y-4">
+        {[
+          {
+            icon: <Clock size={18} className="text-brand-600" />,
+            title: 'Prazo para Cancelamento',
+            bg: 'bg-warm-50',
+            text: 'Os cancelamentos devem ser realizados com no mínimo 2 (duas) horas de antecedência do horário agendado. Cancelamentos fora desse prazo podem resultar em cobrança parcial do serviço.',
+          },
+          {
+            icon: <CheckCircle size={18} className="text-green-500" />,
+            title: 'Como Cancelar',
+            bg: 'bg-green-50',
+            list: [
+              'Entre em contato pelo WhatsApp: +55 99 98462-6896',
+              'Informe seu nome, horário e serviço agendado',
+              'Aguarde a confirmação do cancelamento',
+            ],
+          },
+          {
+            icon: <AlertCircle size={18} className="text-amber-500" />,
+            title: 'Reagendamentos',
+            bg: 'bg-amber-50',
+            text: 'Reagendamentos são bem-vindos e podem ser solicitados pelo WhatsApp com antecedência mínima de 2 horas. Estamos sempre abertos a encontrar o melhor horário para você.',
+          },
+          {
+            icon: <Shield size={18} className="text-brand-600" />,
+            title: 'Nosso Compromisso',
+            bg: 'bg-warm-50',
+            text: 'Valorizamos seu tempo. Em caso de imprevistos da nossa parte, entraremos em contato o mais breve possível para reagendar sem custos adicionais. Sua satisfação é nossa prioridade.',
+          },
+        ].map(({ icon, title, bg, text, list }) => (
+          <div key={title} className={`border border-brand-100 p-6 ${bg}`}>
+            <div className="flex items-center gap-2 mb-3">
+              {icon}
+              <h2 className="font-semibold text-brand-900 text-sm tracking-wide">{title}</h2>
+            </div>
+            {text && <p className="text-brand-500 text-sm leading-relaxed">{text}</p>}
+            {list && (
+              <ul className="space-y-2 text-sm text-brand-500">
+                {list.map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <span className="text-green-500 mt-0.5 shrink-0">✓</span>{item}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
       </div>
 
       <div className="mt-10 text-center">
-        <p className="text-gray-500 text-sm mb-4">Dúvidas? Fale conosco pelo WhatsApp.</p>
+        <p className="text-brand-400 text-xs mb-5 tracking-wide">Dúvidas? Fale conosco pelo WhatsApp.</p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link to="/agendamento" className="btn-primary">Fazer Agendamento</Link>
-          <Link to="/contato" className="btn-secondary">Ver Contato</Link>
+          <Link to="/contato"    className="btn-secondary">Ver Contato</Link>
         </div>
       </div>
-    </div>
-  );
-}
-
-function PolicySection({ icon, title, color, children }) {
-  return (
-    <div className={`card border p-6 ${color}`}>
-      <div className="flex items-center gap-2 mb-3">
-        {icon}
-        <h2 className="font-bold text-gray-800 text-lg">{title}</h2>
-      </div>
-      <div className="text-gray-600 text-sm leading-relaxed">{children}</div>
     </div>
   );
 }
