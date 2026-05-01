@@ -7,43 +7,51 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: {
-          50: '#e8f0f8',
-          100: '#c5d8ee',
-          200: '#9fbfe3',
-          300: '#79a5d8',
-          400: '#5c91cf',
-          500: '#3f7dc6',
-          600: '#2d6ab5',
-          700: '#1a5299',
-          800: '#1a3d5c',
-          900: '#0f2540',
+        // Monochromatic luxury palette
+        brand: {
+          50:  '#f5f5f5',
+          100: '#e8e8e8',
+          200: '#d0d0d0',
+          300: '#a8a8a8',
+          400: '#808080',
+          500: '#585858',
+          600: '#383838',
+          700: '#242424',
+          800: '#141414',
+          900: '#0a0a0a',
         },
         gold: {
-          400: '#d4a843',
-          500: '#c9952a',
-          600: '#b8831a',
+          300: '#e8d5a8',
+          400: '#d4b882',
+          500: '#c9a96e',
+          600: '#b8975a',
+          700: '#9a7a3e',
         },
+        warm: {
+          50:  '#fafaf8',
+          100: '#f5f2ee',
+          200: '#ece7df',
+          300: '#ddd6ca',
+        },
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['Inter', 'system-ui', 'sans-serif'],
+      },
+      letterSpacing: {
+        widest: '0.2em',
+        ultra: '0.35em',
       },
       animation: {
-        'fade-in': 'fadeIn 0.5s ease-in-out',
-        'slide-up': 'slideUp 0.4s ease-out',
-        'slide-in': 'slideIn 0.3s ease-out',
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'fade-in':    'fadeIn 0.6s ease-in-out',
+        'slide-up':   'slideUp 0.5s ease-out',
+        'slide-in':   'slideIn 0.4s ease-out',
+        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       },
       keyframes: {
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        slideUp: {
-          '0%': { opacity: '0', transform: 'translateY(20px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        slideIn: {
-          '0%': { opacity: '0', transform: 'translateX(-10px)' },
-          '100%': { opacity: '1', transform: 'translateX(0)' },
-        },
+        fadeIn:  { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+        slideUp: { '0%': { opacity: '0', transform: 'translateY(24px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+        slideIn: { '0%': { opacity: '0', transform: 'translateX(-12px)' }, '100%': { opacity: '1', transform: 'translateX(0)' } },
       },
     },
   },

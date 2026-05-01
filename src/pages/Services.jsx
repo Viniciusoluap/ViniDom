@@ -6,82 +6,76 @@ import { formatPrice, formatDuration } from '../utils/dateFormatter';
 import { SERVICES } from '../utils/constants';
 
 export default function Services() {
-  const { filtered, categories, activeCategory, setActiveCategory } = useServices();
+  const { categories, activeCategory, setActiveCategory, filtered } = useServices();
 
   return (
-    <div className="flex-1 py-10 px-4 sm:px-6 max-w-6xl mx-auto w-full animate-fade-in">
-      <div className="text-center mb-10">
+    <div className="flex-1 pt-24 pb-16 px-6 max-w-5xl mx-auto w-full animate-fade-in">
+      <div className="text-center mb-12">
+        <p className="section-subtitle mb-3">Cardápio</p>
         <h1 className="section-title text-3xl sm:text-4xl">Serviços & Preços</h1>
-        <p className="section-subtitle">Qualidade profissional em cada atendimento</p>
       </div>
 
-      {/* Category Filter */}
-      <div className="flex flex-wrap gap-2 justify-center mb-8">
+      {/* Filter */}
+      <div className="flex flex-wrap gap-2 justify-center mb-10">
         {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-150 ${
+          <button key={cat} onClick={() => setActiveCategory(cat)}
+            className={`px-5 py-2 text-xs tracking-widest uppercase font-medium border transition-all duration-150 ${
               activeCategory === cat
-                ? 'bg-primary-800 text-white border-primary-800'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300 hover:text-primary-800'
-            }`}
-          >
+                ? 'bg-brand-900 text-white border-brand-900'
+                : 'bg-white text-brand-500 border-brand-200 hover:border-brand-900 hover:text-brand-900'
+            }`}>
             {cat}
           </button>
         ))}
       </div>
 
       {/* Service Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-12">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-brand-100 mb-12">
         {filtered.map((service) => (
-          <div key={service.id} className="flex flex-col">
+          <div key={service.id} className="bg-warm-50 flex flex-col">
             <ServiceCard service={service} />
-            <Link
-              to={`/agendamento?servico=${service.id}`}
-              className="mt-2 btn-primary text-sm py-2 text-center flex items-center justify-center gap-1.5"
-            >
-              Agendar <ArrowRight size={14} />
+            <Link to={`/agendamento?servico=${service.id}`}
+              className="btn-primary text-xs py-3 text-center flex items-center justify-center gap-2 m-4 mt-0">
+              Agendar <ArrowRight size={12} />
             </Link>
           </div>
         ))}
       </div>
 
-      {/* Full Price Table */}
-      <div className="card overflow-hidden">
-        <div className="bg-primary-800 text-white px-6 py-4">
-          <h2 className="font-bold text-xl">Tabela de Preços Completa</h2>
+      {/* Price Table */}
+      <div className="bg-white border border-brand-100 overflow-hidden">
+        <div className="bg-brand-900 text-white px-6 py-4">
+          <h2 className="font-bold tracking-wide text-sm uppercase">Tabela Completa de Preços</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
+          <table className="w-full text-xs">
+            <thead className="bg-warm-50 border-b border-brand-100">
               <tr>
-                <th className="text-left px-6 py-3 font-semibold text-gray-600">Serviço</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Categoria</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-600">Duração</th>
-                <th className="text-right px-6 py-3 font-semibold text-gray-600">Preço</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-600">Ação</th>
+                {['Serviço', 'Categoria', 'Duração', 'Preço', ''].map((h) => (
+                  <th key={h} className={`px-5 py-3.5 font-semibold text-brand-400 tracking-widest uppercase ${h === '' || h === 'Duração' || h === 'Preço' ? 'text-center' : 'text-left'}`}>{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-brand-50">
               {SERVICES.map((s) => (
-                <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-gray-800">
+                <tr key={s.id} className="hover:bg-warm-50 transition-colors">
+                  <td className="px-5 py-4 font-medium text-brand-800">
                     <span className="mr-2">{s.icon}</span>{s.name}
-                    {s.popular && <span className="ml-2 badge bg-gold-400/10 text-gold-600 text-xs">Popular</span>}
+                    {s.popular && <span className="ml-2 text-gold-600 text-xs">★</span>}
                   </td>
-                  <td className="px-4 py-4 text-gray-500">{s.category}</td>
-                  <td className="px-4 py-4 text-center text-gray-500">
+                  <td className="px-4 py-4 text-brand-400">{s.category}</td>
+                  <td className="px-4 py-4 text-center text-brand-400">
                     <span className="flex items-center justify-center gap-1">
-                      <Clock size={13} />{formatDuration(s.duration)}
+                      <Clock size={11} />{formatDuration(s.duration)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right font-bold text-primary-800">{formatPrice(s.price)}</td>
+                  <td className="px-5 py-4 text-center font-bold text-brand-900">
+                    {s.priceLabel && <span className="text-brand-300 font-normal mr-1">{s.priceLabel} </span>}
+                    {formatPrice(s.price)}
+                  </td>
                   <td className="px-4 py-4 text-center">
-                    <Link
-                      to={`/agendamento?servico=${s.id}`}
-                      className="text-primary-700 hover:text-primary-900 font-medium hover:underline transition-colors text-xs"
-                    >
+                    <Link to={`/agendamento?servico=${s.id}`}
+                      className="text-gold-600 hover:text-gold-700 font-medium hover:underline transition-colors">
                       Agendar →
                     </Link>
                   </td>
@@ -92,10 +86,9 @@ export default function Services() {
         </div>
       </div>
 
-      <div className="mt-8 text-center">
-        <p className="text-gray-500 text-sm mb-4">Prontos para te atender com excelência</p>
-        <Link to="/agendamento" className="btn-primary inline-flex items-center gap-2">
-          Fazer Agendamento <ArrowRight size={16} />
+      <div className="mt-10 text-center">
+        <Link to="/agendamento" className="btn-primary inline-flex items-center gap-3">
+          Fazer Agendamento <ArrowRight size={13} />
         </Link>
       </div>
     </div>

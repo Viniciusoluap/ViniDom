@@ -1,42 +1,50 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Scissors } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
+import Logo from './Logo';
 
 const NAV_LINKS = [
-  { to: '/', label: 'Início' },
-  { to: '/servicos', label: 'Serviços' },
-  { to: '/agendamento', label: 'Agendar' },
-  { to: '/sobre', label: 'Sobre' },
+  { to: '/',        label: 'Início' },
+  { to: '/servicos',label: 'Serviços' },
+  { to: '/sobre',   label: 'Sobre' },
   { to: '/contato', label: 'Contato' },
 ];
 
 export default function Header() {
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const { pathname } = useLocation();
 
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // On home page: transparent until scrolled; elsewhere: always solid
+  const isHome = pathname === '/';
+  const solid  = !isHome || scrolled;
+
   return (
-    <header className="sticky top-0 z-50 bg-primary-800 shadow-lg">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+      solid ? 'bg-brand-900 shadow-md' : 'bg-transparent'
+    }`}>
+      <div className="max-w-6xl mx-auto px-6">
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center gap-2 group" onClick={() => setOpen(false)}>
-            <div className="w-9 h-9 bg-gold-400 rounded-lg flex items-center justify-center shadow-md group-hover:bg-gold-500 transition-colors">
-              <Scissors size={18} className="text-white" />
-            </div>
-            <div className="leading-none">
-              <span className="block text-white font-bold text-lg tracking-wide">Dom Concept</span>
-              <span className="block text-primary-300 text-xs">Imperatriz • MA</span>
-            </div>
+          <Link to="/" onClick={() => setOpen(false)}>
+            <Logo size="sm" inverted />
           </Link>
 
+          {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">
             {NAV_LINKS.map(({ to, label }) => (
               <Link
                 key={to}
                 to={to}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-4 py-2 text-xs tracking-widest uppercase font-medium transition-colors duration-200 ${
                   pathname === to
-                    ? 'bg-primary-700 text-white'
-                    : 'text-primary-100 hover:bg-primary-700 hover:text-white'
+                    ? 'text-gold-400'
+                    : 'text-brand-300 hover:text-white'
                 }`}
               >
                 {label}
@@ -44,34 +52,34 @@ export default function Header() {
             ))}
             <Link
               to="/agendamento"
-              className="ml-3 bg-gold-400 hover:bg-gold-500 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors shadow-md"
+              className="ml-6 btn-gold py-2.5 px-6 text-xs"
             >
-              Agendar Agora
+              Agendar
             </Link>
           </nav>
 
+          {/* Mobile hamburger */}
           <button
-            className="md:hidden p-2 rounded-lg text-primary-100 hover:bg-primary-700 transition-colors"
+            className="md:hidden p-2 text-brand-300 hover:text-white transition-colors"
             onClick={() => setOpen(!open)}
             aria-label="Menu"
           >
-            {open ? <X size={22} /> : <Menu size={22} />}
+            {open ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
       </div>
 
+      {/* Mobile menu */}
       {open && (
-        <div className="md:hidden border-t border-primary-700 bg-primary-800 animate-fade-in">
-          <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-1">
+        <div className="md:hidden bg-brand-900 border-t border-brand-800 animate-fade-in">
+          <div className="max-w-6xl mx-auto px-6 py-4 flex flex-col gap-1">
             {NAV_LINKS.map(({ to, label }) => (
               <Link
                 key={to}
                 to={to}
                 onClick={() => setOpen(false)}
-                className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                  pathname === to
-                    ? 'bg-primary-700 text-white'
-                    : 'text-primary-100 hover:bg-primary-700 hover:text-white'
+                className={`px-4 py-3 text-xs tracking-widest uppercase font-medium transition-colors ${
+                  pathname === to ? 'text-gold-400' : 'text-brand-300 hover:text-white'
                 }`}
               >
                 {label}
@@ -80,9 +88,9 @@ export default function Header() {
             <Link
               to="/agendamento"
               onClick={() => setOpen(false)}
-              className="mt-2 bg-gold-400 hover:bg-gold-500 text-white font-semibold px-4 py-3 rounded-lg text-sm text-center transition-colors shadow-md"
+              className="mt-3 btn-gold text-center py-3"
             >
-              Agendar Agora
+              Agendar Horário
             </Link>
           </div>
         </div>
