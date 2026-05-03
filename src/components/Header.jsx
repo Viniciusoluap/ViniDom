@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Lock } from 'lucide-react';
 import Logo from './Logo';
 
 const NAV_LINKS = [
@@ -21,7 +21,6 @@ export default function Header() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // On home page: transparent until scrolled; elsewhere: always solid
   const isHome = pathname === '/';
   const solid  = !isHome || scrolled;
 
@@ -32,7 +31,7 @@ export default function Header() {
       <div className="max-w-6xl mx-auto px-6">
         <div className="flex items-center justify-between h-16">
           <Link to="/" onClick={() => setOpen(false)}>
-            <Logo size="sm" inverted />
+            <Logo size="sm" inverted horizontal />
           </Link>
 
           {/* Desktop nav */}
@@ -52,9 +51,16 @@ export default function Header() {
             ))}
             <Link
               to="/agendamento"
-              className="ml-6 btn-gold py-2.5 px-6 text-xs"
+              className="ml-4 btn-gold py-2.5 px-6 text-xs"
             >
               Agendar
+            </Link>
+            <Link
+              to="/admin"
+              className="ml-2 p-2 text-brand-500 hover:text-gold-400 transition-colors"
+              title="Acesso administrativo"
+            >
+              <Lock size={15} />
             </Link>
           </nav>
 
@@ -91,6 +97,13 @@ export default function Header() {
               className="mt-3 btn-gold text-center py-3"
             >
               Agendar Horário
+            </Link>
+            <Link
+              to="/admin"
+              onClick={() => setOpen(false)}
+              className="mt-1 px-4 py-3 text-xs tracking-widest uppercase font-medium text-brand-500 hover:text-white transition-colors flex items-center gap-2"
+            >
+              <Lock size={12} /> Admin
             </Link>
           </div>
         </div>

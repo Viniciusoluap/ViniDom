@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, MapPin, Shield } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { SERVICES } from '../utils/constants';
 import { formatPrice, formatDuration } from '../utils/dateFormatter';
 import { buildWhatsAppQuickLink } from '../utils/whatsappFormatter';
@@ -25,50 +25,13 @@ export default function Home() {
           backgroundImage: 'repeating-linear-gradient(90deg, #fff 0px, #fff 1px, transparent 1px, transparent 60px)',
         }} />
 
-        <div className="relative flex flex-col items-center text-center animate-slide-up max-w-2xl">
-          {/* Logo – placeholder until PNG is provided */}
-          <div className="mb-10">
+        <div className="relative flex flex-col items-center text-center animate-slide-up">
+          <div className="mb-12">
             <Logo size="lg" inverted />
           </div>
-
-          <div className="divider-label text-brand-600 text-xs mb-8 w-48 mx-auto">
-            Imperatriz · MA
-          </div>
-
-          <h1 className="text-white text-3xl sm:text-4xl lg:text-5xl font-light leading-tight tracking-tight mb-6">
-            O cuidado que<br />
-            <span className="text-gold-400 font-semibold">você merece.</span>
-          </h1>
-
-          <p className="text-brand-300 text-sm sm:text-base leading-relaxed max-w-sm mb-12">
-            Cortes precisos, barba impecável e tratamentos premium. Agende online em minutos.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xs sm:max-w-none sm:justify-center">
-            <Link to="/agendamento" className="btn-gold flex items-center justify-center gap-3">
-              Agendar Horário <ArrowRight size={14} />
-            </Link>
-            <a
-              href={buildWhatsAppQuickLink()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-secondary border-brand-600 text-brand-300 hover:text-white hover:border-white flex items-center justify-center gap-3"
-            >
-              <WhatsAppIcon /> WhatsApp
-            </a>
-          </div>
-
-          <div className="mt-16 flex flex-wrap justify-center gap-6 text-xs text-brand-500 tracking-widest uppercase">
-            <span className="flex items-center gap-2"><MapPin size={12} /> Imperatriz – MA</span>
-            <span className="flex items-center gap-2"><Clock size={12} /> Seg–Sáb · 10h–18h</span>
-            <span className="flex items-center gap-2"><Shield size={12} /> Alto Padrão</span>
-          </div>
-        </div>
-
-        {/* scroll hint */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-brand-600 animate-pulse-slow">
-          <span className="text-xs tracking-widest uppercase">Explorar</span>
-          <div className="w-px h-8 bg-brand-700" />
+          <Link to="/agendamento" className="btn-gold flex items-center justify-center gap-3">
+            Agendar Horário <ArrowRight size={14} />
+          </Link>
         </div>
       </section>
 
