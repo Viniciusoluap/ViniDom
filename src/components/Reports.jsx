@@ -1,0 +1,285 @@
+import { useMemo } from 'react';
+import { formatPrice, formatDateLong } from '../utils/dateFormatter';
+import { MONTH_NAMES_PT } from '../utils/constants';
+
+export default function Reports({ bookings }) {
+  const active = useMemo(() => bookings.filter(b => b.status !== 'cancelled'), [bookings]);
+
+  // Unique clients by phone
+  const clientMap = useMemo(() => {
+    const map = new Map();
+    bookings.forEach((b) => {
+      const phone = (b.client?.phone || '').replace(/\D/g, '');
+      if (!phone) return;
+      const bDate = new Date(b.date);
+      const existing = map.get(phone);
+      if (!existing) {
+        map.set(phone, {
+          name:       b.client.name  || '',
+          phone:      b.client.phone || '',
+          visits:     b.status !== 'cancelled' ? 1 : 0,
+          totalSpent: b.status !== 'cancelled' ? (b.totalPrice || 0) : 0,
+          lastVisit:  b.status !== 'cancelled' ? bDate : null,
+          lastDate:   bDate,
+        });
+      } else {
+        if (bDate > existing.lastDate) {
+          existing.name     = b.client.name  || existing.name;
+          existing.lastDate = bDate;
+        }
+        if (b.status !== 'cancelled') {
+          existing.visits     += 1;
+          existing.totalSpent += b.totalPrice || 0;
+          if (!existing.lastVisit || bDate > existing.lastVisit) {
+            existing.lastVisit = bDate;
+          }
+        }
+      }
+    });
+    return map;
+  }, [bookings]);
+
+  const clients = useMemo(() => Array.from(clientMap.values()), [clientMap]);
+
+  // General summary
+  const totalRevenue  = useMemo(() => active.reduce((s, b) => s + (b.totalPrice || 0), 0), [active]);
+  const ticketMedio   = active.length ? totalRevenue / active.length : 0;
+  const uniqueClients = clients.length;
+
+  // Revenue by last 6 months
+  const revenueByMonth = useMemo(() => {
+    const now   = new Date();
+    const rows  = [];
+    for (let i = 0; i < 6; i++) {
+      const d     = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year  = d.getFullYear();
+      const month = d.getMonth();
+      const monthBookings = active.filter(b => {
+        const bd = new Date(b.date);
+        return bd.getFullYear() === year && bd.getMonth() === month;
+      });
+      rows.push({
+        label:    `${MONTH_NAMES_PT[month]} ${year}`,
+        count:    monthBookings.length,
+        revenue:  monthBookings.reduce((s, b) => s + (b.totalPrice || 0), 0),
+      });
+    }
+    return rows;
+  }, [active]);
+
+  // Top 5 services
+  const topServices = useMemo(() => {
+    const map = new Map();
+    active.forEach(b => {
+      const list = b.services || (b.service ? [b.service] : []);
+      list.forEach(s => {
+        const entry = map.get(s.name) || { name: s.name, count: 0, revenue: 0 };
+        entry.count  += 1;
+        entry.revenue += s.price || 0;
+        map.set(s.name, entry);
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count).slice(0, 5);
+  }, [active]);
+
+  // Top 5 clients by visits
+  const topClients = useMemo(() =>
+    clients.slice().sort((a, b) => b.visits - a.visits).slice(0, 5),
+    [clients]
+  );
+
+  // Follow-up: last visit > 30 days ago
+  const now30 = new Date();
+  now30.setDate(now30.getDate() - 30);
+  const followUp = useMemo(() =>
+    clients
+      .filter(c => c.lastVisit && c.lastVisit < now30)
+      .sort((a, b) => a.lastVisit - b.lastVisit),
+    [clients]
+  );
+
+  const daysSince = (date) => Math.floor((new Date() - new Date(date)) / 86400000);
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+
+      {/* 1. Resumo Geral */}
+      <section>
+        <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-4">
+          Resumo Geral
+        </h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="Total de Agendamentos" value={active.length} sub="todos os tempos" />
+          <StatCard label="Receita Total"         value={formatPrice(totalRevenue)} sub="todos os tempos" accent />
+          <StatCard label="Ticket Médio"          value={formatPrice(ticketMedio)} sub="por agendamento" />
+          <StatCard label="Clientes Únicos"       value={uniqueClients} sub="cadastrados" />
+        </div>
+      </section>
+
+      {/* 2. Receita por Mês */}
+      <section>
+        <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-4">
+          Receita por Mês — Últimos 6 meses
+        </h2>
+        <div className="bg-white border border-brand-100 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-brand-100 bg-warm-50">
+                <th className="text-left px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">Mês / Ano</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">Agendamentos</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">Receita</th>
+              </tr>
+            </thead>
+            <tbody>
+              {revenueByMonth.map((row, i) => (
+                <tr key={row.label} className={`border-b border-brand-50 hover:bg-warm-50 transition-colors ${i % 2 !== 0 ? 'bg-warm-50/40' : ''}`}>
+                  <td className="px-4 py-3 font-semibold text-brand-900">{row.label}</td>
+                  <td className="px-4 py-3 text-right text-brand-500">{row.count}</td>
+                  <td className="px-4 py-3 text-right font-bold text-brand-900">{formatPrice(row.revenue)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* 3. Serviços Mais Populares */}
+      <section>
+        <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-4">
+          Serviços Mais Populares — Top 5
+        </h2>
+        {topServices.length === 0 ? (
+          <EmptyState text="Nenhum serviço registrado." />
+        ) : (
+          <div className="bg-white border border-brand-100 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-brand-100 bg-warm-50">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">Serviço</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">Agendamentos</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">Receita</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topServices.map((s, i) => (
+                  <tr key={s.name} className={`border-b border-brand-50 hover:bg-warm-50 transition-colors ${i % 2 !== 0 ? 'bg-warm-50/40' : ''}`}>
+                    <td className="px-4 py-3 font-semibold text-brand-900">{s.name}</td>
+                    <td className="px-4 py-3 text-right text-brand-500">{s.count}</td>
+                    <td className="px-4 py-3 text-right font-bold text-brand-900">{formatPrice(s.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* 4. Clientes Mais Frequentes */}
+      <section>
+        <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-4">
+          Clientes Mais Frequentes — Top 5
+        </h2>
+        {topClients.length === 0 ? (
+          <EmptyState text="Nenhum cliente cadastrado." />
+        ) : (
+          <div className="bg-white border border-brand-100 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-brand-100 bg-warm-50">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">Nome</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">WhatsApp</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">Visitas</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">Total Gasto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topClients.map((c, i) => (
+                  <tr key={c.phone} className={`border-b border-brand-50 hover:bg-warm-50 transition-colors ${i % 2 !== 0 ? 'bg-warm-50/40' : ''}`}>
+                    <td className="px-4 py-3 font-semibold text-brand-900">{c.name || '—'}</td>
+                    <td className="px-4 py-3 text-brand-500">{c.phone || '—'}</td>
+                    <td className="px-4 py-3 text-right font-bold text-brand-900">{c.visits}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-brand-900">{formatPrice(c.totalSpent)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* 5. Follow-up */}
+      <section>
+        <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-4">
+          Follow-up — Clientes para Contatar
+        </h2>
+        <p className="text-xs text-brand-300 mb-3">Clientes cuja última visita foi há mais de 30 dias.</p>
+        {followUp.length === 0 ? (
+          <div className="bg-white border border-brand-100 p-8 text-center text-brand-300 text-sm">
+            Todos os clientes visitaram recentemente.
+          </div>
+        ) : (
+          <div className="bg-white border border-brand-100 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-brand-100 bg-warm-50">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">Nome</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">WhatsApp</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">Última Visita</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-brand-400 uppercase tracking-widest">Dias</th>
+                </tr>
+              </thead>
+              <tbody>
+                {followUp.map((c, i) => {
+                  const digits  = (c.phone || '').replace(/\D/g, '');
+                  const waText  = encodeURIComponent(`Olá ${c.name}! Sentimos sua falta, que tal agendar um horário com o Vinicius Cavalcante?`);
+                  const waLink  = `https://wa.me/55${digits}?text=${waText}`;
+                  return (
+                    <tr key={c.phone} className={`border-b border-brand-50 hover:bg-warm-50 transition-colors ${i % 2 !== 0 ? 'bg-warm-50/40' : ''}`}>
+                      <td className="px-4 py-3 font-semibold text-brand-900">{c.name || '—'}</td>
+                      <td className="px-4 py-3">
+                        <a
+                          href={waLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-brand-500 hover:text-brand-900 transition-colors underline underline-offset-2"
+                        >
+                          {c.phone || '—'}
+                        </a>
+                      </td>
+                      <td className="px-4 py-3 text-right text-brand-400">
+                        {c.lastVisit ? formatDateLong(c.lastVisit) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-gold-500">
+                        {c.lastVisit ? `${daysSince(c.lastVisit)}d` : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, accent }) {
+  return (
+    <div className="bg-white border border-brand-100 p-5">
+      <p className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-3">{label}</p>
+      <p className={`font-bold leading-tight ${accent ? 'text-gold-500' : 'text-brand-900'} ${String(value).length > 8 ? 'text-sm' : 'text-2xl'}`}>
+        {value}
+      </p>
+      <p className="text-xs text-brand-300 mt-0.5">{sub}</p>
+    </div>
+  );
+}
+
+function EmptyState({ text }) {
+  return (
+    <div className="bg-white border border-brand-100 p-8 text-center text-brand-300 text-sm">
+      {text}
+    </div>
+  );
+}

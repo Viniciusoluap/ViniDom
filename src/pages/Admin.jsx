@@ -1,13 +1,19 @@
 import { useState } from 'react';
 import Dashboard from '../components/Dashboard';
-import { BarChart3, Lock } from 'lucide-react';
+import ClientsList from '../components/ClientsList';
+import Reports from '../components/Reports';
+import { BarChart3, Users, TrendingUp, Lock } from 'lucide-react';
 import { ADMIN_PASSWORD } from '../utils/constants';
 import { supabase } from '../lib/supabase';
+import { useBookings } from '../hooks/useBookings';
 
 export default function Admin() {
   const [authed, setAuthed] = useState(() => !!sessionStorage.getItem('admin_auth'));
   const [pw, setPw]         = useState('');
   const [error, setError]   = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
+
+  const { bookings, loading } = useBookings();
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -54,9 +60,16 @@ export default function Admin() {
     );
   }
 
+  const tabs = [
+    { id: 'dashboard', label: 'Dashboard',  icon: <BarChart3 size={15} /> },
+    { id: 'clientes',  label: 'Clientes',   icon: <Users size={15} /> },
+    { id: 'relatorios',label: 'Relatórios', icon: <TrendingUp size={15} /> },
+  ];
+
   return (
     <div className="flex-1 pt-24 pb-16 px-6 max-w-6xl mx-auto w-full animate-fade-in">
-      <div className="flex items-center justify-between mb-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-brand-900 flex items-center justify-center">
             <BarChart3 size={18} className="text-white" />
@@ -73,19 +86,51 @@ export default function Admin() {
           Sair
         </button>
       </div>
+
+      {/* Connection status banner */}
       {!supabase && (
-        <div className="bg-amber-50 border border-amber-200 px-4 py-3 mb-6 text-xs text-amber-700 flex items-center gap-2">
+        <div className="bg-amber-50 border border-amber-200 px-4 py-3 mb-5 text-xs text-amber-700 flex items-center gap-2">
           <span>⚠️</span>
           <span>Dados armazenados localmente neste dispositivo. Configure o Supabase para salvar na nuvem.</span>
         </div>
       )}
       {supabase && (
-        <div className="bg-green-50 border border-green-200 px-4 py-3 mb-6 text-xs text-green-700 flex items-center gap-2">
+        <div className="bg-green-50 border border-green-200 px-4 py-3 mb-5 text-xs text-green-700 flex items-center gap-2">
           <span>✅</span>
           <span>Conectado ao banco de dados na nuvem.</span>
         </div>
       )}
-      <Dashboard />
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 border-b border-brand-100">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-5 py-3 text-xs font-semibold tracking-widest uppercase transition-colors border-b-2 -mb-px ${
+              activeTab === tab.id
+                ? 'bg-brand-900 text-white border-brand-900'
+                : 'text-brand-500 border-transparent hover:text-brand-900 hover:border-brand-200'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      {activeTab === 'dashboard' && <Dashboard />}
+      {activeTab === 'clientes'  && (
+        loading
+          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando clientes...</div>
+          : <ClientsList bookings={bookings} />
+      )}
+      {activeTab === 'relatorios' && (
+        loading
+          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando relatórios...</div>
+          : <Reports bookings={bookings} />
+      )}
     </div>
   );
 }
