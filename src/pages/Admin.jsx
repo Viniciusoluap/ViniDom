@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Dashboard from '../components/Dashboard';
 import { BarChart3, Lock } from 'lucide-react';
 import { ADMIN_PASSWORD } from '../utils/constants';
+import { supabase } from '../lib/supabase';
 
 export default function Admin() {
   const [authed, setAuthed] = useState(() => !!sessionStorage.getItem('admin_auth'));
@@ -72,10 +73,18 @@ export default function Admin() {
           Sair
         </button>
       </div>
-      <div className="bg-amber-50 border border-amber-200 px-4 py-3 mb-6 text-xs text-amber-700 flex items-center gap-2">
-        <span>⚠️</span>
-        <span>Dados armazenados localmente neste dispositivo.</span>
-      </div>
+      {!supabase && (
+        <div className="bg-amber-50 border border-amber-200 px-4 py-3 mb-6 text-xs text-amber-700 flex items-center gap-2">
+          <span>⚠️</span>
+          <span>Dados armazenados localmente neste dispositivo. Configure o Supabase para salvar na nuvem.</span>
+        </div>
+      )}
+      {supabase && (
+        <div className="bg-green-50 border border-green-200 px-4 py-3 mb-6 text-xs text-green-700 flex items-center gap-2">
+          <span>✅</span>
+          <span>Conectado ao banco de dados na nuvem.</span>
+        </div>
+      )}
       <Dashboard />
     </div>
   );
