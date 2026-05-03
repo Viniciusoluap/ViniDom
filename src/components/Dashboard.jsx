@@ -1,61 +1,27 @@
-import { useState } from 'react';
-import { Calendar, TrendingUp, Star, Clock, Printer } from 'lucide-react';
+import { Calendar, TrendingUp, Star, Clock } from 'lucide-react';
 import { useBookings } from '../hooks/useBookings';
 import { formatDateLong, formatTime, formatPrice } from '../utils/dateFormatter';
 import { MONTH_NAMES_PT } from '../utils/constants';
 
 export default function Dashboard() {
   const today = new Date();
-  const [filterYear, setFilterYear]   = useState(today.getFullYear());
-  const [filterMonth, setFilterMonth] = useState(today.getMonth());
+  const currentYear  = today.getFullYear();
+  const currentMonth = today.getMonth();
 
   const { getTodayBookings, getMonthBookings, getMostBookedService, getUpcoming, cancelBooking } = useBookings();
 
-  const todayBookings  = getTodayBookings();
-  const monthBookings  = getMonthBookings(filterYear, filterMonth);
-  const mostBooked     = getMostBookedService();
-  const upcoming       = getUpcoming();
-  const totalRevenue   = monthBookings.reduce((sum, b) => sum + (b.totalPrice ?? b.service?.price ?? 0), 0);
-
-  const currentYear = today.getFullYear();
-  const yearOptions = [currentYear, currentYear - 1, currentYear - 2, currentYear - 3];
+  const todayBookings = getTodayBookings();
+  const monthBookings = getMonthBookings(currentYear, currentMonth);
+  const mostBooked    = getMostBookedService();
+  const upcoming      = getUpcoming();
+  const totalRevenue  = monthBookings.reduce((sum, b) => sum + (b.totalPrice ?? b.service?.price ?? 0), 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-3 bg-white border border-brand-100 p-4">
-        <span className="text-xs font-semibold text-brand-400 uppercase tracking-widest">Filtrar:</span>
-        <select
-          value={filterMonth}
-          onChange={(e) => setFilterMonth(Number(e.target.value))}
-          className="input-field py-1.5 text-sm w-auto"
-        >
-          {MONTH_NAMES_PT.map((name, idx) => (
-            <option key={idx} value={idx}>{name}</option>
-          ))}
-        </select>
-        <select
-          value={filterYear}
-          onChange={(e) => setFilterYear(Number(e.target.value))}
-          className="input-field py-1.5 text-sm w-auto"
-        >
-          {yearOptions.map(y => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
-        <button
-          onClick={() => window.print()}
-          className="ml-auto flex items-center gap-2 btn-secondary py-1.5 text-sm"
-        >
-          <Printer size={14} />
-          Imprimir Relatório
-        </button>
-      </div>
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat icon={<Calendar size={20} className="text-brand-600" />}  label="Hoje"         value={todayBookings.length} sub="agendamentos" />
-        <Stat icon={<TrendingUp size={20} className="text-gold-500" />} label={`${MONTH_NAMES_PT[filterMonth]} ${filterYear}`} value={monthBookings.length} sub="agendamentos" />
-        <Stat icon={<span className="text-lg">💰</span>}                label="Receita"      value={formatPrice(totalRevenue)} sub={`${MONTH_NAMES_PT[filterMonth].toLowerCase()} ${filterYear}`} small />
+        <Stat icon={<TrendingUp size={20} className="text-gold-500" />} label={`${MONTH_NAMES_PT[currentMonth]} ${currentYear}`} value={monthBookings.length} sub="agendamentos" />
+        <Stat icon={<span className="text-lg">💰</span>}                label="Receita"      value={formatPrice(totalRevenue)} sub={`${MONTH_NAMES_PT[currentMonth].toLowerCase()} ${currentYear}`} small />
         <Stat icon={<Star size={20} className="text-gold-400" />}       label="Mais Agendado" value={mostBooked || '—'} sub="serviço" small />
       </div>
 

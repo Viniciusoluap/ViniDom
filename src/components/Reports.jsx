@@ -1,9 +1,24 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Printer } from 'lucide-react';
 import { formatPrice, formatDateLong } from '../utils/dateFormatter';
 import { MONTH_NAMES_PT } from '../utils/constants';
 
 export default function Reports({ bookings }) {
+  const today = new Date();
+  const [filterMonth, setFilterMonth] = useState(today.getMonth());
+  const [filterYear, setFilterYear]   = useState(today.getFullYear());
+
+  const currentYear = today.getFullYear();
+  const yearOptions = [currentYear, currentYear - 1, currentYear - 2, currentYear - 3];
   const active = useMemo(() => bookings.filter(b => b.status !== 'cancelled'), [bookings]);
+
+  const filteredActive = useMemo(() =>
+    active.filter(b => {
+      const d = new Date(b.date);
+      return d.getFullYear() === filterYear && d.getMonth() === filterMonth;
+    }),
+    [active, filterYear, filterMonth]
+  );
 
   // Unique clients by phone
   const clientMap = useMemo(() => {
@@ -41,10 +56,13 @@ export default function Reports({ bookings }) {
 
   const clients = useMemo(() => Array.from(clientMap.values()), [clientMap]);
 
-  // General summary
-  const totalRevenue  = useMemo(() => active.reduce((s, b) => s + (b.totalPrice || 0), 0), [active]);
-  const ticketMedio   = active.length ? totalRevenue / active.length : 0;
-  const uniqueClients = clients.length;
+  // General summary (filtered by selected month/year)
+  const totalRevenue  = useMemo(() => filteredActive.reduce((s, b) => s + (b.totalPrice || 0), 0), [filteredActive]);
+  const ticketMedio   = filteredActive.length ? totalRevenue / filteredActive.length : 0;
+  const uniqueClients = useMemo(() => {
+    const phones = new Set(filteredActive.map(b => (b.client?.phone || '').replace(/\D/g, '')).filter(Boolean));
+    return phones.size;
+  }, [filteredActive]);
 
   // Revenue by last 6 months
   const revenueByMonth = useMemo(() => {
@@ -100,19 +118,51 @@ export default function Reports({ bookings }) {
 
   const daysSince = (date) => Math.floor((new Date() - new Date(date)) / 86400000);
 
+  const periodLabel = `${MONTH_NAMES_PT[filterMonth]} ${filterYear}`;
+
   return (
     <div className="space-y-8 animate-fade-in">
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-3 bg-white border border-brand-100 p-4">
+        <span className="text-xs font-semibold text-brand-400 uppercase tracking-widest">Filtrar:</span>
+        <select
+          value={filterMonth}
+          onChange={(e) => setFilterMonth(Number(e.target.value))}
+          className="input-field py-1.5 text-sm w-auto"
+        >
+          {MONTH_NAMES_PT.map((name, idx) => (
+            <option key={idx} value={idx}>{name}</option>
+          ))}
+        </select>
+        <select
+          value={filterYear}
+          onChange={(e) => setFilterYear(Number(e.target.value))}
+          className="input-field py-1.5 text-sm w-auto"
+        >
+          {yearOptions.map(y => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+        <button
+          onClick={() => window.print()}
+          className="ml-auto flex items-center gap-2 btn-secondary py-1.5 text-sm"
+        >
+          <Printer size={14} />
+          Imprimir Relatório
+        </button>
+      </div>
 
       {/* 1. Resumo Geral */}
       <section>
         <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-4">
-          Resumo Geral
+          Resumo Geral — {periodLabel}
         </h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Total de Agendamentos" value={active.length} sub="todos os tempos" />
-          <StatCard label="Receita Total"         value={formatPrice(totalRevenue)} sub="todos os tempos" accent />
+          <StatCard label="Total de Agendamentos" value={filteredActive.length} sub={periodLabel.toLowerCase()} />
+          <StatCard label="Receita Total"         value={formatPrice(totalRevenue)} sub={periodLabel.toLowerCase()} accent />
           <StatCard label="Ticket Médio"          value={formatPrice(ticketMedio)} sub="por agendamento" />
-          <StatCard label="Clientes Únicos"       value={uniqueClients} sub="cadastrados" />
+          <StatCard label="Clientes Únicos"       value={uniqueClients} sub={periodLabel.toLowerCase()} />
         </div>
       </section>
 
