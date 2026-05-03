@@ -98,7 +98,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-14 pt-6 border-t border-brand-800 flex flex-col sm:flex-row justify-between items-center gap-2 text-xs text-brand-600">
-          <p>© {year} Dom Concept. Todos os direitos reservados.</p>
+          <p>© {year} Vinicius Cavalcante. Todos os direitos reservados.</p>
           <p>Imperatriz – MA</p>
         </div>
       </div>

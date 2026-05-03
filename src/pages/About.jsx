@@ -16,10 +16,10 @@ export default function About() {
         <div className="max-w-4xl mx-auto text-center">
           <p className="section-subtitle text-brand-500 mb-4">Sobre nós</p>
           <h1 className="text-4xl sm:text-5xl font-light tracking-tight text-white mb-6">
-            Dom Concept
+            Vinicius Cavalcante
           </h1>
           <p className="text-brand-300 text-base leading-relaxed max-w-xl mx-auto">
-            Salão de beleza masculino de alto padrão, consolidado em Imperatriz – MA.
+            Visagista &amp; Hair Expert com base em Imperatriz – MA.
             Exclusividade, cuidado e resultados que falam por si.
           </p>
         </div>
@@ -31,9 +31,9 @@ export default function About() {
             <p className="section-subtitle mb-3">Nossa História</p>
             <h2 className="section-title mb-6">Vinicius Cavalcante</h2>
             <div className="space-y-4 text-brand-500 text-sm leading-relaxed">
-              <p>O Dom Concept nasceu da paixão de <strong className="text-brand-900">Vinicius Cavalcante</strong> pelo universo da beleza e estética masculina. Com anos de dedicação ao ofício, Vinicius construiu um espaço único em Imperatriz onde cada cliente recebe atenção personalizada.</p>
+              <p><strong className="text-brand-900">Vinicius Cavalcante</strong> é visagista e hair expert apaixonado pelo universo da beleza e estética masculina. Com anos de dedicação ao ofício, construiu em Imperatriz um atendimento único onde cada cliente recebe atenção absolutamente personalizada.</p>
               <p>Acreditamos que um bom corte é muito mais do que estética — é uma experiência. Por isso investimos em ambiente premium, produtos de alta performance e técnicas sempre atualizadas.</p>
-              <p>No Dom Concept você encontra cortes de alto nível, barba impecável e tratamentos exclusivos, tudo com o toque de quem realmente se importa com o resultado.</p>
+              <p>Com Vinicius Cavalcante você encontra cortes de alto nível, barba impecável e tratamentos exclusivos, tudo com o toque de quem realmente se importa com o resultado.</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">

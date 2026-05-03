@@ -112,7 +112,7 @@ export default function Home() {
           <div className="text-center mb-16">
             <p className="section-subtitle text-brand-500 mb-3">Diferenciais</p>
             <h2 className="text-2xl sm:text-3xl font-light text-white tracking-tight">
-              Por que o Dom Concept?
+              Por que Vinicius Cavalcante?
             </h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">

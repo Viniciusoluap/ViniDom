@@ -29,7 +29,7 @@ export default function Admin() {
             </div>
             <div>
               <p className="text-brand-900 font-semibold tracking-wide">Acesso Administrativo</p>
-              <p className="text-brand-400 text-xs tracking-widest uppercase mt-0.5">Dom Concept</p>
+              <p className="text-brand-400 text-xs tracking-widest uppercase mt-0.5">Vinicius Cavalcante</p>
             </div>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
@@ -62,7 +62,7 @@ export default function Admin() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-brand-900 tracking-wide">Painel Administrativo</h1>
-            <p className="text-brand-400 text-xs tracking-widest uppercase">Dom Concept · Visão geral</p>
+            <p className="text-brand-400 text-xs tracking-widest uppercase">Vinicius Cavalcante · Visão geral</p>
           </div>
         </div>
         <button

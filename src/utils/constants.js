@@ -1,5 +1,5 @@
 export const BUSINESS_INFO = {
-  name: 'Dom Concept',
+  name: 'Vinicius Cavalcante',
   owner: 'Vinicius Cavalcante',
   phone: '+5599984626896',
   phoneDisplay: '+55 99 98462-6896',

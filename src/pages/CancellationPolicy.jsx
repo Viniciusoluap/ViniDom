@@ -7,7 +7,7 @@ export default function CancellationPolicy() {
       <div className="text-center mb-12">
         <p className="section-subtitle mb-3">Política</p>
         <h1 className="section-title text-3xl">Cancelamento</h1>
-        <p className="text-brand-400 text-sm mt-2">Dom Concept – Imperatriz, MA</p>
+        <p className="text-brand-400 text-sm mt-2">Vinicius Cavalcante – Imperatriz, MA</p>
       </div>
 
       <div className="space-y-4">
