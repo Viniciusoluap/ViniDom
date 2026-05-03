@@ -10,7 +10,7 @@ export default function Dashboard() {
   const monthBookings  = getMonthBookings(today.getFullYear(), today.getMonth());
   const mostBooked     = getMostBookedService();
   const upcoming       = getUpcoming();
-  const totalRevenue   = monthBookings.reduce((sum, b) => sum + b.service.price, 0);
+  const totalRevenue   = monthBookings.reduce((sum, b) => sum + (b.totalPrice ?? b.service?.price ?? 0), 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -66,18 +66,22 @@ function Panel({ title, icon, empty, children }) {
 }
 
 function BookingRow({ booking: b, onCancel }) {
+  const services = b.services || (b.service ? [b.service] : []);
+  const price    = b.totalPrice ?? b.service?.price ?? 0;
   return (
     <li className="flex items-start gap-3 p-3 bg-warm-50 border border-brand-50">
-      <span className="text-xl mt-0.5">{b.service.icon}</span>
+      <span className="text-xl mt-0.5">{services[0]?.icon ?? '✂️'}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="font-semibold text-sm text-brand-900 leading-tight">{b.service.name}</p>
+            <p className="font-semibold text-sm text-brand-900 leading-tight">
+              {services.map(s => s.name).join(' + ')}
+            </p>
             <p className="text-xs text-brand-400 mt-0.5">{b.client.name} · {formatTime(b.timeSlot)}</p>
             <p className="text-xs text-brand-300">{formatDateLong(new Date(b.date))}</p>
           </div>
           <div className="text-right shrink-0">
-            <span className="font-bold text-brand-900 text-sm">{formatPrice(b.service.price)}</span>
+            <span className="font-bold text-brand-900 text-sm">{formatPrice(price)}</span>
             <button onClick={() => onCancel(b.id)}
               className="block mt-1 text-xs text-red-400 hover:text-red-600 transition-colors">
               Cancelar

@@ -6,64 +6,99 @@ import CalendarPicker from '../components/CalendarPicker';
 import TimeSlotPicker from '../components/TimeSlotPicker';
 import BookingForm from '../components/BookingForm';
 import BookingSummary from '../components/BookingSummary';
-import { useBookings } from '../hooks/useBookings';
 import { useAvailableSlots } from '../hooks/useAvailableSlots';
 import { useServices } from '../hooks/useServices';
 import { dateToKey } from '../utils/dateFormatter';
 import { buildWhatsAppLink } from '../utils/whatsappFormatter';
+import { addBooking, getSlotsForDate } from '../utils/bookingService';
+import { sendBookingConfirmation } from '../utils/emailService';
 
 const STEPS = ['Serviço', 'Data & Hora', 'Seus Dados', 'Confirmar'];
-
-const EMPTY_CLIENT = { name: '', phone: '', email: '', notes: '', whatsappConfirm: true };
+const EMPTY_CLIENT = { name: '', phone: '', email: '', notes: '' };
 
 export default function Booking() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { services, categories } = useServices();
-  const { addBooking, getBookingsForDate } = useBookings();
 
-  const [step, setStep]                   = useState(0);
-  const [selectedService, setSelectedService] = useState(null);
-  const [selectedDate, setSelectedDate]   = useState(null);
-  const [selectedSlot, setSelectedSlot]   = useState(null);
-  const [client, setClient]               = useState(EMPTY_CLIENT);
-  const [loading, setLoading]             = useState(false);
-  const [activeCategory, setActiveCategory] = useState('Todos');
+  const [step, setStep]                       = useState(0);
+  const [selectedServices, setSelectedServices] = useState([]);
+  const [selectedDate, setSelectedDate]         = useState(null);
+  const [selectedSlot, setSelectedSlot]         = useState(null);
+  const [client, setClient]                     = useState(EMPTY_CLIENT);
+  const [loading, setLoading]                   = useState(false);
+  const [activeCategory, setActiveCategory]     = useState('Todos');
+  const [bookedSlots, setBookedSlots]           = useState([]);
 
+  const totalDuration = selectedServices.reduce((s, svc) => s + svc.duration, 0);
+  const totalPrice    = selectedServices.reduce((s, svc) => s + svc.price, 0);
+
+  // Pre-select service from URL param
   useEffect(() => {
     const sid = searchParams.get('servico');
     if (sid) {
-      const found = services.find((s) => s.id === Number(sid));
-      if (found) { setSelectedService(found); setStep(1); }
+      const found = services.find(s => s.id === Number(sid));
+      if (found) { setSelectedServices([found]); setStep(1); }
     }
-  }, []);
+  }, [services]);
 
-  const bookedSlots = selectedDate ? getBookingsForDate(selectedDate) : [];
-  const slots = useAvailableSlots({ date: selectedDate, service: selectedService, bookedSlots });
+  // Fetch booked slots whenever date changes
+  useEffect(() => {
+    if (!selectedDate) { setBookedSlots([]); return; }
+    getSlotsForDate(selectedDate).then(setBookedSlots);
+  }, [selectedDate]);
+
+  const slots = useAvailableSlots({ date: selectedDate, totalDuration, bookedSlots });
+
+  const toggleService = (service) => {
+    setSelectedServices(prev =>
+      prev.some(s => s.id === service.id)
+        ? prev.filter(s => s.id !== service.id)
+        : [...prev, service]
+    );
+    setSelectedDate(null);
+    setSelectedSlot(null);
+  };
+
+  const handleDateSelect = (date) => { setSelectedDate(date); setSelectedSlot(null); };
 
   const canNext = () => {
-    if (step === 0) return !!selectedService;
+    if (step === 0) return selectedServices.length > 0;
     if (step === 1) return !!selectedDate && selectedSlot !== null;
     return true;
   };
 
-  const goNext = () => { if (canNext()) setStep((s) => Math.min(s + 1, STEPS.length - 1)); };
-  const goBack = () => setStep((s) => Math.max(s - 1, 0));
+  const goNext = () => { if (canNext()) setStep(s => Math.min(s + 1, STEPS.length - 1)); };
+  const goBack = () => setStep(s => Math.max(s - 1, 0));
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     setLoading(true);
-    const booking = addBooking({
-      service: selectedService, date: selectedDate.toISOString(),
-      dateKey: dateToKey(selectedDate), timeSlot: selectedSlot, client,
-    });
-    const waLink = buildWhatsAppLink({ service: selectedService, date: selectedDate, time: selectedSlot, clientName: client.name });
-    setTimeout(() => { window.open(waLink, '_blank'); navigate(`/confirmacao?id=${booking.id}`); }, 600);
+    try {
+      const booking = await addBooking({
+        services: selectedServices,
+        date:     selectedDate.toISOString(),
+        dateKey:  dateToKey(selectedDate),
+        timeSlot: selectedSlot,
+        totalDuration,
+        totalPrice,
+        client,
+      });
+
+      // Send email (silent if not configured or no email provided)
+      await sendBookingConfirmation({ services: selectedServices, date: booking.date, timeSlot: selectedSlot, totalPrice, client });
+
+      // Open WhatsApp with booking details
+      const waLink = buildWhatsAppLink({ services: selectedServices, date: selectedDate, time: selectedSlot, clientName: client.name });
+      window.open(waLink, '_blank');
+
+      navigate(`/confirmacao?id=${booking.id}`);
+    } catch (err) {
+      console.error('Erro ao confirmar agendamento:', err);
+      setLoading(false);
+    }
   };
 
-  const handleServiceSelect = (service) => { setSelectedService(service); setSelectedDate(null); setSelectedSlot(null); };
-  const handleDateSelect    = (date) =>    { setSelectedDate(date); setSelectedSlot(null); };
-
-  const filtered = activeCategory === 'Todos' ? services : services.filter((s) => s.category === activeCategory);
+  const filtered = activeCategory === 'Todos' ? services : services.filter(s => s.category === activeCategory);
 
   return (
     <div className="flex-1 pt-24 pb-16 px-6 max-w-4xl mx-auto w-full animate-fade-in">
@@ -74,12 +109,22 @@ export default function Booking() {
 
       <StepIndicator steps={STEPS} current={step} />
 
-      {/* Step 0 – Service */}
+      {/* Step 0 – Serviços */}
       {step === 0 && (
         <div className="animate-slide-up">
-          <h2 className="font-semibold text-brand-900 text-base mb-5 tracking-wide">Qual serviço você deseja?</h2>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-semibold text-brand-900 text-base tracking-wide">
+              Quais serviços você deseja?
+            </h2>
+            {selectedServices.length > 0 && (
+              <span className="text-xs text-gold-600 font-medium tracking-widest uppercase">
+                {selectedServices.length} selecionado{selectedServices.length > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-2 mb-6">
-            {categories.map((cat) => (
+            {categories.map(cat => (
               <button key={cat} onClick={() => setActiveCategory(cat)}
                 className={`px-4 py-1.5 text-xs tracking-widest uppercase font-medium border transition-all ${
                   activeCategory === cat
@@ -90,12 +135,29 @@ export default function Booking() {
               </button>
             ))}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
-            {filtered.map((service) => (
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+            {filtered.map(service => (
               <ServiceCard key={service.id} service={service}
-                selected={selectedService?.id === service.id} onSelect={handleServiceSelect} />
+                selected={selectedServices.some(s => s.id === service.id)}
+                onSelect={toggleService} />
             ))}
           </div>
+
+          {selectedServices.length > 0 && (
+            <div className="bg-warm-100 border border-brand-100 p-4 mb-6 flex items-center justify-between text-sm">
+              <span className="text-brand-500 text-xs tracking-widest uppercase">Total estimado</span>
+              <div className="text-right">
+                <span className="font-bold text-brand-900">
+                  {selectedServices.reduce((s, svc) => s + svc.price, 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+                <span className="text-brand-400 text-xs ml-2">
+                  · {selectedServices.reduce((s, svc) => s + svc.duration, 0)} min
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end">
             <button onClick={goNext} disabled={!canNext()}
               className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed">
@@ -105,12 +167,15 @@ export default function Booking() {
         </div>
       )}
 
-      {/* Step 1 – Date & Time */}
+      {/* Step 1 – Data & Hora */}
       {step === 1 && (
         <div className="animate-slide-up">
-          <div className="mb-6 flex items-center gap-3 bg-warm-100 border border-brand-100 p-4 text-sm text-brand-800">
-            <span className="text-xl">{selectedService.icon}</span>
-            <span className="font-semibold">{selectedService.name}</span>
+          <div className="mb-6 flex flex-wrap gap-2">
+            {selectedServices.map(s => (
+              <span key={s.id} className="inline-flex items-center gap-2 bg-warm-100 border border-brand-100 px-3 py-1.5 text-sm text-brand-800">
+                <span>{s.icon}</span><span className="font-semibold">{s.name}</span>
+              </span>
+            ))}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <div>
@@ -123,9 +188,7 @@ export default function Booking() {
               </h2>
               {selectedDate
                 ? <TimeSlotPicker slots={slots} selected={selectedSlot} onSelect={setSelectedSlot} />
-                : <div className="border border-brand-100 p-10 text-center text-brand-300 text-sm bg-white">
-                    Escolha uma data no calendário
-                  </div>
+                : <div className="border border-brand-100 p-10 text-center text-brand-300 text-sm bg-white">Escolha uma data no calendário</div>
               }
             </div>
           </div>
@@ -139,7 +202,7 @@ export default function Booking() {
         </div>
       )}
 
-      {/* Step 2 – Client */}
+      {/* Step 2 – Dados */}
       {step === 2 && (
         <div className="animate-slide-up max-w-lg mx-auto">
           <h2 className="font-semibold text-brand-900 text-base mb-6 tracking-wide">Seus Dados</h2>
@@ -148,11 +211,20 @@ export default function Booking() {
         </div>
       )}
 
-      {/* Step 3 – Summary */}
+      {/* Step 3 – Resumo */}
       {step === 3 && (
         <div className="max-w-lg mx-auto">
-          <BookingSummary service={selectedService} date={selectedDate} timeSlot={selectedSlot}
-            client={client} onConfirm={handleConfirm} onBack={goBack} loading={loading} />
+          <BookingSummary
+            services={selectedServices}
+            date={selectedDate}
+            timeSlot={selectedSlot}
+            totalDuration={totalDuration}
+            totalPrice={totalPrice}
+            client={client}
+            onConfirm={handleConfirm}
+            onBack={goBack}
+            loading={loading}
+          />
         </div>
       )}
     </div>

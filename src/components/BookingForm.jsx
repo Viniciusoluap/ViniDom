@@ -56,7 +56,7 @@ export default function BookingForm({ value, onChange, onSubmit }) {
         <Error msg={errors.phone} show={touched.phone} />
       </Field>
 
-      <Field label="E-mail" optional>
+      <Field label="E-mail" optional hint="Para receber a confirmação por e-mail">
         <div className="relative">
           <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-300" />
           <input id="email" type="email" className={`${inputCls('email')} pl-10`}
@@ -76,16 +76,6 @@ export default function BookingForm({ value, onChange, onSubmit }) {
         </div>
       </Field>
 
-      <label className="flex items-center gap-3 cursor-pointer group">
-        <input type="checkbox"
-          className="w-4 h-4 border-brand-300 text-brand-900 focus:ring-brand-900"
-          checked={value.whatsappConfirm}
-          onChange={(e) => handleChange('whatsappConfirm', e.target.checked)} />
-        <span className="text-xs text-brand-500 group-hover:text-brand-900 transition-colors tracking-wide">
-          Quero confirmar pelo WhatsApp
-        </span>
-      </label>
-
       <button type="submit" className="btn-primary w-full mt-2">
         Revisar Agendamento
       </button>
@@ -93,13 +83,14 @@ export default function BookingForm({ value, onChange, onSubmit }) {
   );
 }
 
-function Field({ label, required, optional, children }) {
+function Field({ label, required, optional, hint, children }) {
   return (
     <div>
       <label className="block text-xs font-medium text-brand-600 mb-2 tracking-widest uppercase">
         {label}
         {required && <span className="text-gold-500 ml-0.5">*</span>}
         {optional && <span className="text-brand-300 ml-1 normal-case">(opcional)</span>}
+        {hint   && <span className="text-brand-300 ml-1 normal-case font-normal">· {hint}</span>}
       </label>
       {children}
     </div>
