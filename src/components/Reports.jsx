@@ -15,7 +15,9 @@ export default function Reports({ bookings }) {
   const filteredActive = useMemo(() =>
     active.filter(b => {
       const d = new Date(b.date);
-      return d.getFullYear() === filterYear && d.getMonth() === filterMonth;
+      if (d.getFullYear() !== filterYear) return false;
+      if (filterMonth === -1) return true;
+      return d.getMonth() === filterMonth;
     }),
     [active, filterYear, filterMonth]
   );
@@ -129,7 +131,9 @@ export default function Reports({ bookings }) {
 
   const daysSince = (date) => Math.floor((new Date() - new Date(date)) / 86400000);
 
-  const periodLabel = `${MONTH_NAMES_PT[filterMonth]} ${filterYear}`;
+  const periodLabel = filterMonth === -1
+    ? `Todos os meses de ${filterYear}`
+    : `${MONTH_NAMES_PT[filterMonth]} ${filterYear}`;
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -142,6 +146,7 @@ export default function Reports({ bookings }) {
           onChange={(e) => setFilterMonth(Number(e.target.value))}
           className="input-field py-1.5 text-sm w-auto"
         >
+          <option value={-1}>Todos os meses</option>
           {MONTH_NAMES_PT.map((name, idx) => (
             <option key={idx} value={idx}>{name}</option>
           ))}
