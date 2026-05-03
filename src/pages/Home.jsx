@@ -26,11 +26,11 @@ export default function Home() {
         }} />
 
         <div className="relative flex flex-col items-center text-center animate-slide-up">
-          <div className="mb-12">
-            <Logo size="lg" inverted />
+          <div className="mb-6">
+            <Logo size="lg" inverted style={{ width: 'min(88vw, 420px)' }} />
           </div>
-          <Link to="/agendamento" className="btn-gold flex items-center justify-center gap-3">
-            Agendar Horário <ArrowRight size={14} />
+          <Link to="/agendamento" className="btn-gold flex items-center justify-center gap-3 w-full max-w-xs py-5 text-sm">
+            Agendar Horário <ArrowRight size={16} />
           </Link>
         </div>
       </section>
