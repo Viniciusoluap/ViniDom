@@ -1,5 +1,5 @@
 export default function Logo({ size = 'md', inverted = false, horizontal = false }) {
-  const widths = { sm: 110, md: 150, lg: 210, xl: 280 };
+  const widths = { sm: 110, md: 150, lg: 320, xl: 400 };
   const w = widths[size] ?? 150;
 
   return (
