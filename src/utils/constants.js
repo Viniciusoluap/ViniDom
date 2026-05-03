@@ -115,3 +115,5 @@ export const CANCELLATION_POLICY = {
   hoursInAdvance: 2,
   text: 'Cancelamentos devem ser feitos com no mínimo 2 horas de antecedência.',
 };
+
+export const ADMIN_PASSWORD = 'domconcept2024';
