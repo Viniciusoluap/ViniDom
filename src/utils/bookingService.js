@@ -10,6 +10,46 @@ function saveLocal(list) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
 
+export async function getClientByPhone(phone) {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 10) return null;
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('client_name, client_phone, client_email, client_notes, client_birthdate')
+      .order('created_at', { ascending: false });
+    if (!error && data) {
+      const match = data.find(r => (r.client_phone || '').replace(/\D/g, '') === digits);
+      if (match) {
+        return {
+          name:      match.client_name  || '',
+          phone:     match.client_phone || '',
+          email:     match.client_email || '',
+          notes:     match.client_notes || '',
+          birthdate: match.client_birthdate || '',
+        };
+      }
+    }
+  }
+
+  const local = loadLocal();
+  const match = local
+    .slice()
+    .reverse()
+    .find(b => (b.client?.phone || '').replace(/\D/g, '') === digits);
+  if (match) {
+    return {
+      name:      match.client.name      || '',
+      phone:     match.client.phone     || '',
+      email:     match.client.email     || '',
+      notes:     match.client.notes     || '',
+      birthdate: match.client.birthdate || '',
+    };
+  }
+  return null;
+}
+
 export async function addBooking(data) {
   const id = crypto.randomUUID();
   const booking = {
@@ -20,26 +60,33 @@ export async function addBooking(data) {
     timeSlot:      data.timeSlot,
     totalDuration: data.totalDuration,
     totalPrice:    data.totalPrice,
-    client:        data.client,
+    client: {
+      ...data.client,
+      birthdate: data.client.birthdate || '',
+    },
     status:        'confirmed',
     createdAt:     new Date().toISOString(),
   };
 
   if (supabase) {
-    const { error } = await supabase.from('bookings').insert({
+    const insertData = {
       id,
-      services:      booking.services,
-      date:          booking.date,
-      date_key:      booking.dateKey,
-      time_slot:     booking.timeSlot,
+      services:       booking.services,
+      date:           booking.date,
+      date_key:       booking.dateKey,
+      time_slot:      booking.timeSlot,
       total_duration: booking.totalDuration,
-      total_price:   booking.totalPrice,
-      client_name:   booking.client.name,
-      client_phone:  booking.client.phone,
-      client_email:  booking.client.email || null,
-      client_notes:  booking.client.notes || null,
-      status:        'confirmed',
-    });
+      total_price:    booking.totalPrice,
+      client_name:    booking.client.name,
+      client_phone:   booking.client.phone,
+      client_email:   booking.client.email    || null,
+      client_notes:   booking.client.notes    || null,
+      status:         'confirmed',
+    };
+    if (booking.client.birthdate) {
+      insertData.client_birthdate = booking.client.birthdate;
+    }
+    const { error } = await supabase.from('bookings').insert(insertData);
     if (error) console.error('[Supabase] addBooking:', error.message);
   }
 
@@ -98,10 +145,11 @@ function mapRow(r) {
     totalDuration: r.total_duration,
     totalPrice:    r.total_price,
     client: {
-      name:  r.client_name,
-      phone: r.client_phone,
-      email: r.client_email,
-      notes: r.client_notes,
+      name:      r.client_name,
+      phone:     r.client_phone,
+      email:     r.client_email,
+      notes:     r.client_notes,
+      birthdate: r.client_birthdate || '',
     },
     status:    r.status,
     createdAt: r.created_at,

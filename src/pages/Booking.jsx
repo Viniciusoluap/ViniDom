@@ -14,7 +14,7 @@ import { addBooking, getSlotsForDate } from '../utils/bookingService';
 import { sendBookingConfirmation } from '../utils/emailService';
 
 const STEPS = ['Serviço', 'Data & Hora', 'Seus Dados', 'Confirmar'];
-const EMPTY_CLIENT = { name: '', phone: '', email: '', notes: '' };
+const EMPTY_CLIENT = { name: '', phone: '', email: '', notes: '', birthdate: '' };
 
 export default function Booking() {
   const [searchParams] = useSearchParams();
