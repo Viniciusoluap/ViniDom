@@ -1,21 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle, Calendar, Clock, ArrowRight } from 'lucide-react';
-import { useBookings } from '../hooks/useBookings';
+import { getBookingById } from '../utils/bookingService';
 import { formatDateLong, formatTime, formatPrice } from '../utils/dateFormatter';
 import { buildWhatsAppLink } from '../utils/whatsappFormatter';
 
 export default function Confirmation() {
   const [searchParams] = useSearchParams();
-  const { bookings } = useBookings();
   const [booking, setBooking] = useState(null);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     const id = searchParams.get('id');
-    setBooking(bookings.find((b) => b.id === id) || null);
-  }, [bookings]);
+    if (!id) { setNotFound(true); return; }
+    getBookingById(id).then(b => { if (b) setBooking(b); else setNotFound(true); });
+  }, []);
 
-  if (!booking) return (
+  if (notFound) return (
     <div className="flex-1 flex flex-col items-center justify-center py-20 px-6 text-center animate-fade-in pt-24">
       <span className="text-5xl mb-6">✂️</span>
       <h2 className="text-xl font-bold text-brand-900 mb-2">Agendamento não encontrado</h2>
@@ -24,9 +25,15 @@ export default function Confirmation() {
     </div>
   );
 
-  const waLink = buildWhatsAppLink({
-    service: booking.service, date: new Date(booking.date),
-    time: booking.timeSlot, clientName: booking.client.name,
+  if (!booking) return (
+    <div className="flex-1 flex items-center justify-center pt-24">
+      <div className="w-6 h-6 border-2 border-brand-900 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+
+  const services = booking.services || (booking.service ? [booking.service] : []);
+  const waLink   = buildWhatsAppLink({
+    services, date: new Date(booking.date), time: booking.timeSlot, clientName: booking.client.name,
   });
 
   return (
@@ -35,22 +42,36 @@ export default function Confirmation() {
         <div className="w-16 h-16 bg-warm-100 border border-brand-100 flex items-center justify-center mx-auto mb-5">
           <CheckCircle size={32} className="text-gold-500" />
         </div>
-        <p className="section-subtitle mb-2">Pré-agendamento</p>
-        <h1 className="section-title text-3xl">Registrado!</h1>
+        <p className="section-subtitle mb-2">Agendamento</p>
+        <h1 className="section-title text-3xl">Confirmado!</h1>
         <p className="text-brand-400 text-sm mt-2 leading-relaxed">
-          Finalize pelo WhatsApp para confirmar seu horário com o Vinicius.
+          Seu horário está reservado. O Vinicius Cavalcante entrará em contato para confirmar os detalhes.
+          {booking.client.email && (
+            <> Verifique também o seu e-mail.</>
+          )}
         </p>
       </div>
 
       <div className="bg-white border border-brand-100 p-6 mb-5">
-        <div className="flex items-center gap-3 pb-4 border-b border-brand-50 mb-4">
-          <span className="text-3xl">{booking.service.icon}</span>
-          <div className="flex-1">
-            <h2 className="font-bold text-brand-900">{booking.service.name}</h2>
-            <span className="text-brand-400 text-xs">{booking.service.category}</span>
-          </div>
-          <span className="font-bold text-brand-900">{formatPrice(booking.service.price)}</span>
+        {/* Serviços */}
+        <div className="pb-4 border-b border-brand-50 mb-4 space-y-2">
+          {services.map(s => (
+            <div key={s.id} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{s.icon}</span>
+                <span className="font-bold text-brand-900 text-sm">{s.name}</span>
+              </div>
+              <span className="font-bold text-brand-900 text-sm">{formatPrice(s.price)}</span>
+            </div>
+          ))}
+          {services.length > 1 && (
+            <div className="flex justify-between pt-2 border-t border-brand-50 text-xs text-brand-400">
+              <span>Total</span>
+              <span className="font-bold text-brand-900 text-sm">{formatPrice(booking.totalPrice)}</span>
+            </div>
+          )}
         </div>
+
         <div className="space-y-3 text-sm">
           <InfoRow icon={<Calendar size={14} />} value={formatDateLong(new Date(booking.date))} />
           <InfoRow icon={<Clock size={14} />}    value={formatTime(booking.timeSlot)} />
@@ -58,14 +79,10 @@ export default function Confirmation() {
         </div>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 p-4 mb-6 text-xs text-amber-700 leading-relaxed">
-        <strong>Atenção:</strong> O horário é confirmado somente após resposta via WhatsApp.
-      </div>
-
       <div className="space-y-3">
         <a href={waLink} target="_blank" rel="noopener noreferrer"
           className="btn-whatsapp w-full flex items-center justify-center gap-2 py-4 font-semibold text-sm">
-          <WhatsAppIcon /> Confirmar no WhatsApp
+          <WhatsAppIcon /> Abrir WhatsApp
         </a>
         <Link to="/agendamento" className="btn-secondary w-full flex items-center justify-center gap-2 py-3">
           Novo Agendamento <ArrowRight size={14} />
