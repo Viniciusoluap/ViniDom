@@ -135,6 +135,43 @@ export async function cancelBooking(id) {
   saveLocal(loadLocal().map(b => b.id === id ? { ...b, status: 'cancelled' } : b));
 }
 
+export async function updateClientByPhone(phone, updates) {
+  const digits = phone.replace(/\D/g, '');
+  if (supabase) {
+    const { data } = await supabase.from('bookings').select('id, client_phone');
+    const ids = (data || [])
+      .filter(r => (r.client_phone || '').replace(/\D/g, '') === digits)
+      .map(r => r.id);
+    if (ids.length) {
+      const patch = {};
+      if (updates.name      !== undefined) patch.client_name      = updates.name;
+      if (updates.email     !== undefined) patch.client_email     = updates.email;
+      if (updates.birthdate !== undefined) patch.client_birthdate = updates.birthdate || null;
+      if (Object.keys(patch).length) {
+        await supabase.from('bookings').update(patch).in('id', ids);
+      }
+    }
+  }
+  saveLocal(loadLocal().map(b => {
+    if ((b.client?.phone || '').replace(/\D/g, '') !== digits) return b;
+    return { ...b, client: { ...b.client, ...updates } };
+  }));
+}
+
+export async function deleteClientByPhone(phone) {
+  const digits = phone.replace(/\D/g, '');
+  if (supabase) {
+    const { data } = await supabase.from('bookings').select('id, client_phone');
+    const ids = (data || [])
+      .filter(r => (r.client_phone || '').replace(/\D/g, '') === digits)
+      .map(r => r.id);
+    if (ids.length) {
+      await supabase.from('bookings').delete().in('id', ids);
+    }
+  }
+  saveLocal(loadLocal().filter(b => (b.client?.phone || '').replace(/\D/g, '') !== digits));
+}
+
 function mapRow(r) {
   return {
     id:            r.id,

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { getAllBookings, cancelBooking as svcCancel } from '../utils/bookingService';
+import { getAllBookings, cancelBooking as svcCancel, updateClientByPhone as svcUpdate, deleteClientByPhone as svcDelete } from '../utils/bookingService';
 import { dateToKey } from '../utils/dateFormatter';
 
 export function useBookings() {
@@ -58,5 +58,21 @@ export function useBookings() {
       .slice(0, 10);
   }, [bookings]);
 
-  return { bookings, loading, cancelBooking, getTodayBookings, getMonthBookings, getMostBookedService, getUpcoming };
+  const updateClient = useCallback(async (phone, updates) => {
+    await svcUpdate(phone, updates);
+    const digits = phone.replace(/\D/g, '');
+    setBookings(prev => prev.map(b =>
+      (b.client?.phone || '').replace(/\D/g, '') === digits
+        ? { ...b, client: { ...b.client, ...updates } }
+        : b
+    ));
+  }, []);
+
+  const deleteClient = useCallback(async (phone) => {
+    await svcDelete(phone);
+    const digits = phone.replace(/\D/g, '');
+    setBookings(prev => prev.filter(b => (b.client?.phone || '').replace(/\D/g, '') !== digits));
+  }, []);
+
+  return { bookings, loading, cancelBooking, updateClient, deleteClient, getTodayBookings, getMonthBookings, getMostBookedService, getUpcoming };
 }

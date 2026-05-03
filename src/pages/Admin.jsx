@@ -13,7 +13,7 @@ export default function Admin() {
   const [error, setError]   = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  const { bookings, loading } = useBookings();
+  const { bookings, loading, updateClient, deleteClient } = useBookings();
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -124,7 +124,7 @@ export default function Admin() {
       {activeTab === 'clientes'  && (
         loading
           ? <div className="text-center py-16 text-brand-300 text-sm">Carregando clientes...</div>
-          : <ClientsList bookings={bookings} />
+          : <ClientsList bookings={bookings} onUpdate={updateClient} onDelete={deleteClient} />
       )}
       {activeTab === 'relatorios' && (
         loading
