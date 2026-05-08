@@ -12,8 +12,9 @@ import { dateToKey } from '../utils/dateFormatter';
 import { buildWhatsAppLink } from '../utils/whatsappFormatter';
 import { addBooking, getSlotsForDate } from '../utils/bookingService';
 import { sendBookingConfirmation } from '../utils/emailService';
+import { STAFF } from '../utils/constants';
 
-const STEPS = ['Serviço', 'Data & Hora', 'Seus Dados', 'Confirmar'];
+const STEPS = ['Serviço', 'Data & Hora', 'Profissional', 'Seus Dados', 'Confirmar'];
 const EMPTY_CLIENT = { name: '', phone: '', email: '', notes: '', birthdate: '' };
 
 export default function Booking() {
@@ -21,10 +22,11 @@ export default function Booking() {
   const navigate = useNavigate();
   const { services, categories } = useServices();
 
-  const [step, setStep]                       = useState(0);
+  const [step, setStep]                         = useState(0);
   const [selectedServices, setSelectedServices] = useState([]);
   const [selectedDate, setSelectedDate]         = useState(null);
   const [selectedSlot, setSelectedSlot]         = useState(null);
+  const [selectedStaff, setSelectedStaff]       = useState(STAFF[0]);
   const [client, setClient]                     = useState(EMPTY_CLIENT);
   const [loading, setLoading]                   = useState(false);
   const [activeCategory, setActiveCategory]     = useState('Todos');
@@ -33,7 +35,6 @@ export default function Booking() {
   const totalDuration = selectedServices.reduce((s, svc) => s + svc.duration, 0);
   const totalPrice    = selectedServices.reduce((s, svc) => s + svc.price, 0);
 
-  // Pre-select service from URL param
   useEffect(() => {
     const sid = searchParams.get('servico');
     if (sid) {
@@ -42,7 +43,6 @@ export default function Booking() {
     }
   }, [services]);
 
-  // Fetch booked slots whenever date changes
   useEffect(() => {
     if (!selectedDate) { setBookedSlots([]); return; }
     getSlotsForDate(selectedDate).then(setBookedSlots);
@@ -65,6 +65,7 @@ export default function Booking() {
   const canNext = () => {
     if (step === 0) return selectedServices.length > 0;
     if (step === 1) return !!selectedDate && selectedSlot !== null;
+    if (step === 2) return !!selectedStaff;
     return true;
   };
 
@@ -81,16 +82,12 @@ export default function Booking() {
         timeSlot: selectedSlot,
         totalDuration,
         totalPrice,
+        professional: selectedStaff?.name || null,
         client,
       });
-
-      // Send email (silent if not configured or no email provided)
       await sendBookingConfirmation({ services: selectedServices, date: booking.date, timeSlot: selectedSlot, totalPrice, client });
-
-      // Open WhatsApp with booking details
       const waLink = buildWhatsAppLink({ services: selectedServices, date: selectedDate, time: selectedSlot, clientName: client.name });
       window.open(waLink, '_blank');
-
       navigate(`/confirmacao?id=${booking.id}`);
     } catch (err) {
       console.error('Erro ao confirmar agendamento:', err);
@@ -149,11 +146,9 @@ export default function Booking() {
               <span className="text-brand-500 text-xs tracking-widest uppercase">Total estimado</span>
               <div className="text-right">
                 <span className="font-bold text-brand-900">
-                  {selectedServices.reduce((s, svc) => s + svc.price, 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  {totalPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
-                <span className="text-brand-400 text-xs ml-2">
-                  · {selectedServices.reduce((s, svc) => s + svc.duration, 0)} min
-                </span>
+                <span className="text-brand-400 text-xs ml-2">· {totalDuration} min</span>
               </div>
             </div>
           )}
@@ -202,8 +197,56 @@ export default function Booking() {
         </div>
       )}
 
-      {/* Step 2 – Dados */}
+      {/* Step 2 – Profissional */}
       {step === 2 && (
+        <div className="animate-slide-up max-w-lg mx-auto">
+          <h2 className="font-semibold text-brand-900 text-base mb-2 tracking-wide">Escolha o Profissional</h2>
+          <p className="text-brand-400 text-sm mb-6">Selecione com quem deseja ser atendido.</p>
+          <div className="space-y-3 mb-8">
+            {STAFF.map(member => {
+              const selected = selectedStaff?.id === member.id;
+              return (
+                <button
+                  key={member.id}
+                  onClick={() => setSelectedStaff(member)}
+                  className={`w-full flex items-center gap-4 p-4 border-2 transition-all text-left ${
+                    selected
+                      ? 'border-brand-900 bg-brand-900 text-white'
+                      : 'border-brand-100 bg-white hover:border-brand-900'
+                  }`}
+                >
+                  <div
+                    className="w-12 h-12 flex items-center justify-center font-bold text-sm shrink-0"
+                    style={{
+                      backgroundColor: selected ? 'rgba(255,255,255,0.2)' : member.color,
+                      color: 'white',
+                    }}
+                  >
+                    {member.initials}
+                  </div>
+                  <div>
+                    <p className={`font-bold text-sm ${selected ? 'text-white' : 'text-brand-900'}`}>{member.name}</p>
+                    <p className={`text-xs ${selected ? 'text-white/70' : 'text-brand-400'} tracking-widest uppercase mt-0.5`}>{member.role}</p>
+                  </div>
+                  {selected && (
+                    <span className="ml-auto text-xs font-semibold tracking-widest uppercase text-gold-300">✓ Selecionado</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex justify-between">
+            <button onClick={goBack} className="btn-secondary py-3">← Voltar</button>
+            <button onClick={goNext} disabled={!canNext()}
+              className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed">
+              Continuar →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3 – Dados */}
+      {step === 3 && (
         <div className="animate-slide-up max-w-lg mx-auto">
           <h2 className="font-semibold text-brand-900 text-base mb-6 tracking-wide">Seus Dados</h2>
           <BookingForm value={client} onChange={setClient} onSubmit={goNext} />
@@ -211,8 +254,8 @@ export default function Booking() {
         </div>
       )}
 
-      {/* Step 3 – Resumo */}
-      {step === 3 && (
+      {/* Step 4 – Resumo */}
+      {step === 4 && (
         <div className="max-w-lg mx-auto">
           <BookingSummary
             services={selectedServices}
@@ -221,6 +264,7 @@ export default function Booking() {
             totalDuration={totalDuration}
             totalPrice={totalPrice}
             client={client}
+            professional={selectedStaff}
             onConfirm={handleConfirm}
             onBack={goBack}
             loading={loading}

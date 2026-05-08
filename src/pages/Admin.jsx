@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import Dashboard from '../components/Dashboard';
+import Agenda from '../components/Agenda';
 import ClientsList from '../components/ClientsList';
+import StaffList from '../components/StaffList';
 import Reports from '../components/Reports';
-import { BarChart3, Users, TrendingUp, Lock } from 'lucide-react';
+import { BarChart3, Calendar, Users, Briefcase, TrendingUp, Lock } from 'lucide-react';
 import { ADMIN_PASSWORD } from '../utils/constants';
 import { supabase } from '../lib/supabase';
 import { useBookings } from '../hooks/useBookings';
@@ -48,12 +50,8 @@ export default function Admin() {
               autoFocus
               className={`input-field ${error ? 'border-red-400 focus:border-red-400' : ''}`}
             />
-            {error && (
-              <p className="text-red-500 text-xs tracking-wide -mt-2">Senha incorreta.</p>
-            )}
-            <button type="submit" className="btn-primary w-full text-center">
-              Entrar
-            </button>
+            {error && <p className="text-red-500 text-xs tracking-wide -mt-2">Senha incorreta.</p>}
+            <button type="submit" className="btn-primary w-full text-center">Entrar</button>
           </form>
         </div>
       </div>
@@ -61,9 +59,11 @@ export default function Admin() {
   }
 
   const tabs = [
-    { id: 'dashboard', label: 'Dashboard',  icon: <BarChart3 size={15} /> },
-    { id: 'clientes',  label: 'Clientes',   icon: <Users size={15} /> },
-    { id: 'relatorios',label: 'Relatórios', icon: <TrendingUp size={15} /> },
+    { id: 'dashboard',    label: 'Dashboard',    icon: <BarChart3  size={14} /> },
+    { id: 'agenda',       label: 'Agenda',        icon: <Calendar   size={14} /> },
+    { id: 'clientes',     label: 'Clientes',      icon: <Users      size={14} /> },
+    { id: 'funcionarios', label: 'Funcionários',  icon: <Briefcase  size={14} /> },
+    { id: 'relatorios',   label: 'Relatórios',    icon: <TrendingUp size={14} /> },
   ];
 
   return (
@@ -87,7 +87,7 @@ export default function Admin() {
         </button>
       </div>
 
-      {/* Connection status banner */}
+      {/* Connection status */}
       {!supabase && (
         <div className="bg-amber-50 border border-amber-200 px-4 py-3 mb-5 text-xs text-amber-700 flex items-center gap-2">
           <span>⚠️</span>
@@ -102,12 +102,12 @@ export default function Admin() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-brand-100">
+      <div className="flex gap-1 mb-6 border-b border-brand-100 overflow-x-auto">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-5 py-3 text-xs font-semibold tracking-widest uppercase transition-colors border-b-2 -mb-px ${
+            className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold tracking-widest uppercase transition-colors border-b-2 -mb-px whitespace-nowrap shrink-0 ${
               activeTab === tab.id
                 ? 'bg-brand-900 text-white border-brand-900'
                 : 'text-brand-500 border-transparent hover:text-brand-900 hover:border-brand-200'
@@ -120,13 +120,23 @@ export default function Admin() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'dashboard' && <Dashboard />}
-      {activeTab === 'clientes'  && (
+      {activeTab === 'dashboard'    && <Dashboard />}
+      {activeTab === 'agenda'       && (
+        loading
+          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando agenda...</div>
+          : <Agenda bookings={bookings} />
+      )}
+      {activeTab === 'clientes'     && (
         loading
           ? <div className="text-center py-16 text-brand-300 text-sm">Carregando clientes...</div>
           : <ClientsList bookings={bookings} onUpdate={updateClient} onDelete={deleteClient} />
       )}
-      {activeTab === 'relatorios' && (
+      {activeTab === 'funcionarios' && (
+        loading
+          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando funcionários...</div>
+          : <StaffList bookings={bookings} />
+      )}
+      {activeTab === 'relatorios'   && (
         loading
           ? <div className="text-center py-16 text-brand-300 text-sm">Carregando relatórios...</div>
           : <Reports bookings={bookings} />

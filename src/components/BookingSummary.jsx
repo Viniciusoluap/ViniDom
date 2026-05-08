@@ -1,7 +1,7 @@
 import { CheckCircle, Calendar, Clock, User, Phone, Scissors } from 'lucide-react';
 import { formatDateLong, formatTime, formatDuration, formatPrice } from '../utils/dateFormatter';
 
-export default function BookingSummary({ services, date, timeSlot, totalDuration, totalPrice, client, onConfirm, onBack, loading }) {
+export default function BookingSummary({ services, date, timeSlot, totalDuration, totalPrice, client, professional, onConfirm, onBack, loading }) {
   return (
     <div className="space-y-5 animate-slide-up">
       <div className="bg-white border border-brand-100 p-6 space-y-0">
@@ -31,11 +31,12 @@ export default function BookingSummary({ services, date, timeSlot, totalDuration
             </div>
           </div>
 
-          <SRow icon={<Clock size={14} />}    label="Duração total" value={formatDuration(totalDuration)} />
-          <SRow icon={<Calendar size={14} />} label="Data"          value={formatDateLong(date)} />
-          <SRow icon={<Clock size={14} />}    label="Horário"       value={formatTime(timeSlot)} />
-          <SRow icon={<User size={14} />}     label="Cliente"       value={client.name} />
-          <SRow icon={<Phone size={14} />}    label="WhatsApp"      value={client.phone} />
+          <SRow icon={<Clock size={14} />}    label="Duração total"  value={formatDuration(totalDuration)} />
+          <SRow icon={<Calendar size={14} />} label="Data"           value={formatDateLong(date)} />
+          <SRow icon={<Clock size={14} />}    label="Horário"        value={formatTime(timeSlot)} />
+          {professional && <SRow icon={<User size={14} />} label="Profissional" value={professional.name} />}
+          <SRow icon={<User size={14} />}     label="Cliente"        value={client.name} />
+          <SRow icon={<Phone size={14} />}    label="WhatsApp"       value={client.phone} />
           {client.email && <SRow icon={<span>✉️</span>} label="E-mail" value={client.email} />}
           {client.notes && <SRow icon={<span>📝</span>} label="Obs."   value={client.notes} />}
 

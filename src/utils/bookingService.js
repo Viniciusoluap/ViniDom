@@ -60,6 +60,7 @@ export async function addBooking(data) {
     timeSlot:      data.timeSlot,
     totalDuration: data.totalDuration,
     totalPrice:    data.totalPrice,
+    professional:  data.professional || null,
     client: {
       ...data.client,
       birthdate: data.client.birthdate || '',
@@ -85,6 +86,9 @@ export async function addBooking(data) {
     };
     if (booking.client.birthdate) {
       insertData.client_birthdate = booking.client.birthdate;
+    }
+    if (booking.professional) {
+      insertData.professional_name = booking.professional;
     }
     const { error } = await supabase.from('bookings').insert(insertData);
     if (error) console.error('[Supabase] addBooking:', error.message);
@@ -188,6 +192,7 @@ function mapRow(r) {
       notes:     r.client_notes,
       birthdate: r.client_birthdate || '',
     },
+    professional: r.professional_name || null,
     status:    r.status,
     createdAt: r.created_at,
   };
