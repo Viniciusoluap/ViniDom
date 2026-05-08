@@ -32,8 +32,9 @@ export default function Reports({ bookings }) {
       const existing = map.get(phone);
       if (!existing) {
         map.set(phone, {
-          name:       b.client.name  || '',
-          phone:      b.client.phone || '',
+          name:       b.client.name      || '',
+          phone:      b.client.phone     || '',
+          birthdate:  b.client?.birthdate || '',
           visits:     b.status !== 'cancelled' ? 1 : 0,
           totalSpent: b.status !== 'cancelled' ? (b.totalPrice || 0) : 0,
           lastVisit:  b.status !== 'cancelled' ? bDate : null,
@@ -41,8 +42,9 @@ export default function Reports({ bookings }) {
         });
       } else {
         if (bDate > existing.lastDate) {
-          existing.name     = b.client.name  || existing.name;
-          existing.lastDate = bDate;
+          existing.name      = b.client.name      || existing.name;
+          existing.birthdate = b.client?.birthdate || existing.birthdate;
+          existing.lastDate  = bDate;
         }
         if (b.status !== 'cancelled') {
           existing.visits     += 1;
