@@ -12,7 +12,7 @@ import { dateToKey } from '../utils/dateFormatter';
 import { buildWhatsAppLink } from '../utils/whatsappFormatter';
 import { addBooking, getSlotsForDate } from '../utils/bookingService';
 import { sendBookingConfirmation } from '../utils/emailService';
-import { STAFF } from '../utils/constants';
+import { loadStaff } from '../utils/staffService';
 
 const STEPS = ['Serviço', 'Data & Hora', 'Profissional', 'Seus Dados', 'Confirmar'];
 const EMPTY_CLIENT = { name: '', phone: '', email: '', notes: '', birthdate: '' };
@@ -26,7 +26,8 @@ export default function Booking() {
   const [selectedServices, setSelectedServices] = useState([]);
   const [selectedDate, setSelectedDate]         = useState(null);
   const [selectedSlot, setSelectedSlot]         = useState(null);
-  const [selectedStaff, setSelectedStaff]       = useState(STAFF[0]);
+  const [staffList]                             = useState(() => loadStaff());
+  const [selectedStaff, setSelectedStaff]       = useState(() => loadStaff()[0]);
   const [client, setClient]                     = useState(EMPTY_CLIENT);
   const [loading, setLoading]                   = useState(false);
   const [activeCategory, setActiveCategory]     = useState('Todos');
@@ -203,7 +204,7 @@ export default function Booking() {
           <h2 className="font-semibold text-brand-900 text-base mb-2 tracking-wide">Escolha o Profissional</h2>
           <p className="text-brand-400 text-sm mb-6">Selecione com quem deseja ser atendido.</p>
           <div className="space-y-3 mb-8">
-            {STAFF.map(member => {
+            {staffList.map(member => {
               const selected = selectedStaff?.id === member.id;
               return (
                 <button

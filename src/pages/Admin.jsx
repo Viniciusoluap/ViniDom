@@ -8,6 +8,7 @@ import { BarChart3, Calendar, Users, Briefcase, TrendingUp, Lock } from 'lucide-
 import { ADMIN_PASSWORD } from '../utils/constants';
 import { supabase } from '../lib/supabase';
 import { useBookings } from '../hooks/useBookings';
+import { useStaff } from '../hooks/useStaff';
 
 export default function Admin() {
   const [authed, setAuthed] = useState(() => !!sessionStorage.getItem('admin_auth'));
@@ -16,6 +17,7 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const { bookings, loading, updateClient, deleteClient } = useBookings();
+  const { staff, addMember, updateMember, deleteMember } = useStaff();
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -124,7 +126,7 @@ export default function Admin() {
       {activeTab === 'agenda'       && (
         loading
           ? <div className="text-center py-16 text-brand-300 text-sm">Carregando agenda...</div>
-          : <Agenda bookings={bookings} />
+          : <Agenda bookings={bookings} staff={staff} />
       )}
       {activeTab === 'clientes'     && (
         loading
@@ -134,7 +136,7 @@ export default function Admin() {
       {activeTab === 'funcionarios' && (
         loading
           ? <div className="text-center py-16 text-brand-300 text-sm">Carregando funcionários...</div>
-          : <StaffList bookings={bookings} />
+          : <StaffList bookings={bookings} staff={staff} onAdd={addMember} onUpdate={updateMember} onDelete={deleteMember} />
       )}
       {activeTab === 'relatorios'   && (
         loading

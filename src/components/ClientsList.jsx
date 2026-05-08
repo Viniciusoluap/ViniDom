@@ -3,7 +3,7 @@ import { Pencil, Trash2, X, Check } from 'lucide-react';
 import { formatPrice, formatDate } from '../utils/dateFormatter';
 
 export default function ClientsList({ bookings, onUpdate, onDelete }) {
-  const [editing, setEditing]   = useState(null); // phone of client being edited
+  const [editing, setEditing]   = useState(null);
   const [form, setForm]         = useState({});
   const [saving, setSaving]     = useState(false);
 
@@ -69,7 +69,6 @@ export default function ClientsList({ bookings, onUpdate, onDelete }) {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      {/* Edit modal */}
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
           <div className="bg-white border border-brand-100 w-full max-w-sm p-6 shadow-xl">
