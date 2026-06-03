@@ -16,28 +16,46 @@ export default function StaffList({ staff, bookings, onAdd, onUpdate, onDelete }
 
   const today = new Date();
 
-  const stats = useMemo(() => staff.map(member => {
-    const mine = bookings.filter(b => b.professional === member.name && b.status !== 'cancelled');
-    const monthMine = mine.filter(b => {
-      const d = new Date(b.date);
-      return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+  const stats = useMemo(() => {
+    const todayKey  = dateToKey(today);
+    const thisMonth = today.getMonth();
+    const thisYear  = today.getFullYear();
+    const nowMs     = today.getTime();
+
+    // Agrupa em uma única passagem ao invés de múltiplos .filter() por funcionário
+    const byPro = {};
+    bookings.forEach(b => {
+      if (b.status === 'cancelled' || !b.professional) return;
+      if (!byPro[b.professional]) byPro[b.professional] = [];
+      byPro[b.professional].push(b);
     });
-    const todayMine = mine.filter(b => b.dateKey === dateToKey(today));
-    const revenue   = monthMine.reduce((s, b) => s + (b.totalPrice || 0), 0);
-    const upcoming  = mine
-      .filter(b => {
+
+    return staff.map(member => {
+      const mine = byPro[member.name] || [];
+      let todayCount = 0, monthCount = 0, revenue = 0;
+      const upcoming = [];
+
+      mine.forEach(b => {
+        if (b.dateKey === todayKey) todayCount++;
         const d = new Date(b.date);
-        d.setHours(Math.floor(b.timeSlot / 60), b.timeSlot % 60, 0, 0);
-        return d >= today;
-      })
-      .sort((a, b) => {
+        if (d.getMonth() === thisMonth && d.getFullYear() === thisYear) {
+          monthCount++;
+          revenue += b.totalPrice || 0;
+        }
+        const dt = new Date(b.date);
+        dt.setHours(Math.floor(b.timeSlot / 60), b.timeSlot % 60, 0, 0);
+        if (dt.getTime() >= nowMs) upcoming.push(b);
+      });
+
+      upcoming.sort((a, b) => {
         const da = new Date(a.date); da.setHours(Math.floor(a.timeSlot / 60), a.timeSlot % 60, 0, 0);
         const db = new Date(b.date); db.setHours(Math.floor(b.timeSlot / 60), b.timeSlot % 60, 0, 0);
         return da - db;
-      })
-      .slice(0, 5);
-    return { ...member, todayCount: todayMine.length, monthCount: monthMine.length, revenue, upcoming };
-  }), [staff, bookings]);
+      });
+
+      return { ...member, todayCount, monthCount, revenue, upcoming: upcoming.slice(0, 5) };
+    });
+  }, [staff, bookings]);
 
   const openAdd = () => {
     setForm(EMPTY_FORM);
