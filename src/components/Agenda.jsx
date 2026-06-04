@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { STAFF, DAY_NAMES_PT, MONTH_NAMES_PT } from '../utils/constants';
+import { DAY_NAMES_PT, MONTH_NAMES_PT } from '../utils/constants';
 import { formatTime, formatPrice } from '../utils/dateFormatter';
 import { dateToKey } from '../utils/dateFormatter';
 
@@ -9,7 +9,7 @@ const HOUR_END    = 19;
 const HOURS       = HOUR_END - HOUR_START;
 const PX_PER_HOUR = 72;
 
-export default function Agenda({ bookings }) {
+export default function Agenda({ bookings, staff = [] }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [staffFilter, setStaffFilter]   = useState('all');
 
@@ -75,7 +75,7 @@ export default function Agenda({ bookings }) {
             className="input-field py-1.5 text-sm w-auto"
           >
             <option value="all">Todos</option>
-            {STAFF.map(s => (
+            {staff.map(s => (
               <option key={s.id} value={s.name}>{s.name}</option>
             ))}
           </select>
@@ -126,7 +126,7 @@ export default function Agenda({ bookings }) {
                 const top        = (startMin / 60) * PX_PER_HOUR;
                 const height     = Math.max((b.totalDuration / 60) * PX_PER_HOUR, 32);
                 const services   = b.services || (b.service ? [b.service] : []);
-                const member     = STAFF.find(s => s.name === b.professional);
+                const member     = staff.find(s => s.name === b.professional);
                 const bg         = member?.color ?? '#1a1a2e';
                 const digits     = (b.client?.phone || '').replace(/\D/g, '');
                 const names      = services.map(s => s.name).join(' + ');
@@ -173,9 +173,9 @@ export default function Agenda({ bookings }) {
       </div>
 
       {/* Legend */}
-      {STAFF.length > 1 && (
+      {staff.length > 1 && (
         <div className="flex flex-wrap gap-3 px-1">
-          {STAFF.map(s => (
+          {staff.map(s => (
             <div key={s.id} className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
               <span className="text-xs text-brand-400">{s.name}</span>
