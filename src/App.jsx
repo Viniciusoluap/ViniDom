@@ -8,6 +8,7 @@ import Confirmation from './pages/Confirmation';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import Admin from './pages/Admin';
+import Funcionario from './pages/Funcionario';
 import CancellationPolicy from './pages/CancellationPolicy';
 import NotFound from './pages/NotFound';
 import { BUSINESS_INFO } from './utils/constants';
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="/sobre" element={<About />} />
           <Route path="/contato" element={<Contact />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/funcionario" element={<Funcionario />} />
           <Route path="/politica-cancelamento" element={<CancellationPolicy />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

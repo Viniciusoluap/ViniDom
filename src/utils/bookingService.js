@@ -161,11 +161,24 @@ export async function getAllBookings() {
   return loadLocal();
 }
 
-export async function cancelBooking(id) {
-  if (supabase) {
-    await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', id);
+export async function updateBookingStatus(id, status) {
+  const local = loadLocal();
+  const target = local.find(b => b.id === id);
+
+  // Libera slot no cache quando cancela — permite novos agendamentos no mesmo horário
+  if (status === 'cancelled' && target?.dateKey) {
+    slotsCache.delete(target.dateKey);
   }
-  saveLocal(loadLocal().map(b => b.id === id ? { ...b, status: 'cancelled' } : b));
+
+  if (supabase) {
+    const { error } = await supabase.from('bookings').update({ status }).eq('id', id);
+    if (error) console.error('[Supabase] updateBookingStatus:', error.message);
+  }
+  saveLocal(local.map(b => b.id === id ? { ...b, status } : b));
+}
+
+export async function cancelBooking(id) {
+  return updateBookingStatus(id, 'cancelled');
 }
 
 export async function updateClientByPhone(phone, updates) {
