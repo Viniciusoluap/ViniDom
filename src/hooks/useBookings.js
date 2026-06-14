@@ -1,5 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
-import { getAllBookings, cancelBooking as svcCancel, updateClientByPhone as svcUpdate, deleteClientByPhone as svcDelete } from '../utils/bookingService';
+import {
+  getAllBookings,
+  cancelBooking as svcCancel,
+  updateBookingStatus as svcUpdateStatus,
+  updateClientByPhone as svcUpdate,
+  deleteClientByPhone as svcDelete,
+} from '../utils/bookingService';
+import { supabase } from '../lib/supabase';
 import { dateToKey } from '../utils/dateFormatter';
 
 export function useBookings() {
@@ -7,12 +14,65 @@ export function useBookings() {
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    getAllBookings().then(data => { setBookings(data); setLoading(false); });
+    let cancelled = false;
+
+    const load = () =>
+      getAllBookings().then(data => {
+        if (!cancelled) { setBookings(data); setLoading(false); }
+      });
+
+    load();
+
+    if (supabase) {
+      let pollId = null;
+
+      // Supabase Realtime — atualização instantânea em qualquer mudança na tabela
+      const channel = supabase
+        .channel('bookings-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'bookings' },
+          () => { if (!cancelled) getAllBookings().then(data => { if (!cancelled) setBookings(data); }); }
+        )
+        .subscribe(status => {
+          if (status === 'SUBSCRIBED') {
+            // Realtime ativo — polling desnecessário
+            if (pollId) { clearInterval(pollId); pollId = null; }
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            // Realtime falhou — inicia polling a cada 10s como fallback
+            if (!pollId) {
+              pollId = setInterval(() => {
+                if (!cancelled) load();
+              }, 10000);
+            }
+          }
+        });
+
+      // Keepalive: ping a cada 4 min para evitar pausa do Supabase no plano gratuito
+      const keepaliveId = setInterval(() => {
+        supabase.from('bookings').select('id').limit(1).then(() => {});
+      }, 4 * 60 * 1000);
+
+      return () => {
+        cancelled = true;
+        supabase.removeChannel(channel);
+        clearInterval(keepaliveId);
+        if (pollId) clearInterval(pollId);
+      };
+    }
+
+    // Sem Supabase: localStorage é local, sem necessidade de sync
+    return () => { cancelled = true; };
   }, []);
 
   const cancelBooking = useCallback(async (id) => {
     await svcCancel(id);
     setBookings(prev => prev.map(b => b.id === id ? { ...b, status: 'cancelled' } : b));
+  }, []);
+
+  const updateBookingStatus = useCallback(async (id, status) => {
+    await svcUpdateStatus(id, status);
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b));
   }, []);
 
   const getTodayBookings = useCallback(() => {
@@ -74,5 +134,16 @@ export function useBookings() {
     setBookings(prev => prev.filter(b => (b.client?.phone || '').replace(/\D/g, '') !== digits));
   }, []);
 
-  return { bookings, loading, cancelBooking, updateClient, deleteClient, getTodayBookings, getMonthBookings, getMostBookedService, getUpcoming };
+  return {
+    bookings,
+    loading,
+    cancelBooking,
+    updateBookingStatus,
+    updateClient,
+    deleteClient,
+    getTodayBookings,
+    getMonthBookings,
+    getMostBookedService,
+    getUpcoming,
+  };
 }

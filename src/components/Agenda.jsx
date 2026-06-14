@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, XCircle } from 'lucide-react';
 import { DAY_NAMES_PT, MONTH_NAMES_PT } from '../utils/constants';
 import { formatTime, formatPrice } from '../utils/dateFormatter';
 import { dateToKey } from '../utils/dateFormatter';
@@ -9,7 +9,7 @@ const HOUR_END    = 19;
 const HOURS       = HOUR_END - HOUR_START;
 const PX_PER_HOUR = 72;
 
-export default function Agenda({ bookings, staff = [] }) {
+export default function Agenda({ bookings, staff = [], onUpdateStatus }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [staffFilter, setStaffFilter]   = useState('all');
 
@@ -136,15 +136,24 @@ export default function Agenda({ bookings, staff = [] }) {
                 );
                 const waLink = `https://wa.me/55${digits}?text=${confirmMsg}`;
 
+                const statusBadge = b.status === 'attended'
+                  ? <span className="text-xs bg-green-500/90 text-white px-1.5 rounded">Atendido</span>
+                  : b.status === 'no_show'
+                  ? <span className="text-xs bg-red-500/90 text-white px-1.5 rounded">Faltou</span>
+                  : null;
+
                 return (
                   <div
                     key={b.id}
                     className="absolute left-2 right-2 flex flex-col px-2 py-1.5 overflow-hidden group"
                     style={{ top, height, backgroundColor: bg }}
                   >
-                    <p className="text-white text-xs font-bold leading-tight truncate">
-                      {b.client?.name || '—'}
-                    </p>
+                    <div className="flex items-start justify-between gap-1">
+                      <p className="text-white text-xs font-bold leading-tight truncate">
+                        {b.client?.name || '—'}
+                      </p>
+                      {statusBadge}
+                    </div>
                     {height > 40 && (
                       <p className="text-white/70 text-xs truncate leading-tight">
                         {names}
@@ -153,7 +162,25 @@ export default function Agenda({ bookings, staff = [] }) {
                     {height > 56 && (
                       <p className="text-white/60 text-xs">{hora} · {formatPrice(b.totalPrice || 0)}</p>
                     )}
-                    {digits && height > 40 && (
+                    {height > 64 && onUpdateStatus && b.status === 'confirmed' && (
+                      <div className="mt-auto flex gap-1">
+                        <button
+                          onClick={e => { e.stopPropagation(); onUpdateStatus(b.id, 'attended'); }}
+                          className="flex items-center gap-0.5 bg-green-500/80 hover:bg-green-500 text-white text-xs px-1.5 py-0.5 transition-colors"
+                          title="Marcar como Atendido"
+                        >
+                          <CheckCircle size={10} /> OK
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); onUpdateStatus(b.id, 'no_show'); }}
+                          className="flex items-center gap-0.5 bg-red-500/80 hover:bg-red-500 text-white text-xs px-1.5 py-0.5 transition-colors"
+                          title="Marcar como Faltou"
+                        >
+                          <XCircle size={10} /> X
+                        </button>
+                      </div>
+                    )}
+                    {digits && height > 40 && b.status === 'confirmed' && !onUpdateStatus && (
                       <a
                         href={waLink}
                         target="_blank"

@@ -1,20 +1,44 @@
 import { Calendar, TrendingUp, Star, Clock } from 'lucide-react';
-import { useBookings } from '../hooks/useBookings';
-import { formatDateLong, formatTime, formatPrice } from '../utils/dateFormatter';
+import { formatDateLong, formatTime, formatPrice, dateToKey } from '../utils/dateFormatter';
 import { MONTH_NAMES_PT } from '../utils/constants';
 
-export default function Dashboard() {
-  const today = new Date();
+export default function Dashboard({ bookings, onCancel }) {
+  const today        = new Date();
+  const todayKey     = dateToKey(today);
   const currentYear  = today.getFullYear();
   const currentMonth = today.getMonth();
+  const now          = today.getTime();
 
-  const { getTodayBookings, getMonthBookings, getMostBookedService, getUpcoming, cancelBooking } = useBookings();
+  const todayBookings = bookings.filter(b => b.dateKey === todayKey && b.status !== 'cancelled');
 
-  const todayBookings = getTodayBookings();
-  const monthBookings = getMonthBookings(currentYear, currentMonth);
-  const mostBooked    = getMostBookedService();
-  const upcoming      = getUpcoming();
-  const totalRevenue  = monthBookings.reduce((sum, b) => sum + (b.totalPrice ?? b.service?.price ?? 0), 0);
+  const monthBookings = bookings.filter(b => {
+    if (b.status === 'cancelled') return false;
+    const d = new Date(b.date);
+    return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+  });
+
+  const upcoming = bookings
+    .filter(b => {
+      if (b.status === 'cancelled') return false;
+      const d = new Date(b.date);
+      d.setHours(Math.floor(b.timeSlot / 60), b.timeSlot % 60, 0, 0);
+      return d.getTime() >= now;
+    })
+    .sort((a, b) => {
+      const da = new Date(a.date); da.setHours(Math.floor(a.timeSlot / 60), a.timeSlot % 60, 0, 0);
+      const db = new Date(b.date); db.setHours(Math.floor(b.timeSlot / 60), b.timeSlot % 60, 0, 0);
+      return da - db;
+    })
+    .slice(0, 10);
+
+  const counts = {};
+  bookings.filter(b => b.status !== 'cancelled').forEach(b => {
+    const list = b.services || (b.service ? [b.service] : []);
+    list.forEach(s => { counts[s.name] = (counts[s.name] || 0) + 1; });
+  });
+  const entries    = Object.entries(counts);
+  const mostBooked = entries.length ? entries.sort((a, b) => b[1] - a[1])[0][0] : null;
+  const totalRevenue = monthBookings.reduce((sum, b) => sum + (b.totalPrice ?? b.service?.price ?? 0), 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -27,11 +51,11 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Panel title="Agenda de Hoje" icon={<Calendar size={16} />} empty={!todayBookings.length}>
-          {todayBookings.map((b) => <BookingRow key={b.id} booking={b} onCancel={cancelBooking} showConfirm />)}
+          {todayBookings.map(b => <BookingRow key={b.id} booking={b} onCancel={onCancel} showConfirm />)}
         </Panel>
         <Panel title="Próximos Agendamentos" icon={<Clock size={16} />} empty={!upcoming.length}>
           <div className="max-h-80 overflow-y-auto space-y-3">
-            {upcoming.map((b) => <BookingRow key={b.id} booking={b} onCancel={cancelBooking} />)}
+            {upcoming.map(b => <BookingRow key={b.id} booking={b} onCancel={onCancel} />)}
           </div>
         </Panel>
       </div>

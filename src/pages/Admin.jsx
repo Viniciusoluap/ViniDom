@@ -16,7 +16,7 @@ export default function Admin() {
   const [error, setError]   = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  const { bookings, loading, updateClient, deleteClient } = useBookings();
+  const { bookings, loading, cancelBooking, updateBookingStatus, updateClient, deleteClient } = useBookings();
   const { staff, addMember, updateMember, deleteMember } = useStaff();
 
   const handleLogin = (e) => {
@@ -122,11 +122,15 @@ export default function Admin() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'dashboard'    && <Dashboard />}
+      {activeTab === 'dashboard'    && (
+        loading
+          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando...</div>
+          : <Dashboard bookings={bookings} onCancel={cancelBooking} />
+      )}
       {activeTab === 'agenda'       && (
         loading
           ? <div className="text-center py-16 text-brand-300 text-sm">Carregando agenda...</div>
-          : <Agenda bookings={bookings} staff={staff} />
+          : <Agenda bookings={bookings} staff={staff} onUpdateStatus={updateBookingStatus} />
       )}
       {activeTab === 'clientes'     && (
         loading

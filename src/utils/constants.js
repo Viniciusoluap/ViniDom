@@ -117,6 +117,7 @@ export const CANCELLATION_POLICY = {
 };
 
 export const ADMIN_PASSWORD = 'domconcept2024';
+export const STAFF_PASSWORD = 'vcfuncionario2024';
 
 export const STAFF = [
   { id: 1, name: 'Vinicius Cavalcante', role: 'Visagista & Hair Expert', color: '#1a1a2e', initials: 'VC' },
