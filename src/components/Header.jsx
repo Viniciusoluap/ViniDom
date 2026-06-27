@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Lock } from 'lucide-react';
+import { Menu, X, Lock, UserCircle } from 'lucide-react';
 import Logo from './Logo';
 
 const NAV_LINKS = [
@@ -62,6 +62,13 @@ export default function Header() {
             >
               <Lock size={15} />
             </Link>
+            <Link
+              to="/funcionario"
+              className="p-2 text-brand-500 hover:text-gold-400 transition-colors"
+              title="Área do funcionário"
+            >
+              <UserCircle size={15} />
+            </Link>
           </nav>
 
           {/* Mobile hamburger */}
@@ -104,6 +111,13 @@ export default function Header() {
               className="mt-1 px-4 py-3 text-xs tracking-widest uppercase font-medium text-brand-500 hover:text-white transition-colors flex items-center gap-2"
             >
               <Lock size={12} /> Admin
+            </Link>
+            <Link
+              to="/funcionario"
+              onClick={() => setOpen(false)}
+              className="px-4 py-3 text-xs tracking-widest uppercase font-medium text-brand-500 hover:text-white transition-colors flex items-center gap-2"
+            >
+              <UserCircle size={12} /> Funcionário
             </Link>
           </div>
         </div>

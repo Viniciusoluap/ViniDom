@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, X, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Check, Eye, EyeOff } from 'lucide-react';
 import { formatPrice, formatTime, dateToKey } from '../utils/dateFormatter';
 
 const PRESET_COLORS = [
@@ -7,12 +7,13 @@ const PRESET_COLORS = [
   '#4a235a', '#7e5109', '#1b4f72', '#922b21',
 ];
 
-const EMPTY_FORM = { name: '', role: '', color: '#1a1a2e', initials: '' };
+const EMPTY_FORM = { name: '', role: '', color: '#1a1a2e', initials: '', email: '', password: '' };
 
 export default function StaffList({ staff, bookings, onAdd, onUpdate, onDelete }) {
   const [modal, setModal]   = useState(null); // null | 'add' | { member }
   const [form, setForm]     = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [showPw, setShowPw] = useState(false);
 
   const today = new Date();
 
@@ -63,12 +64,13 @@ export default function StaffList({ staff, bookings, onAdd, onUpdate, onDelete }
   };
 
   const openEdit = (member) => {
-    setForm({ name: member.name, role: member.role, color: member.color, initials: member.initials });
+    setForm({ name: member.name, role: member.role, color: member.color, initials: member.initials, email: member.email || '', password: member.password || '' });
+    setShowPw(false);
     setModal(member);
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.role.trim()) return;
+    if (!form.name.trim() || !form.role.trim() || !form.email.trim() || !form.password.trim()) return;
     setSaving(true);
     if (modal === 'add') {
       onAdd(form);
@@ -115,6 +117,9 @@ export default function StaffList({ staff, bookings, onAdd, onUpdate, onDelete }
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-brand-900 text-base">{member.name}</h3>
                 <p className="text-xs text-brand-400 tracking-widest uppercase mt-0.5">{member.role}</p>
+                {member.email && (
+                  <p className="text-xs text-brand-300 mt-0.5">{member.email}</p>
+                )}
               </div>
 
               {/* Stats */}
@@ -217,6 +222,37 @@ export default function StaffList({ staff, bookings, onAdd, onUpdate, onDelete }
                   placeholder="Ex: Barbeiro, Cabeleireiro..." />
               </div>
               <div>
+                <label className="block text-xs font-semibold text-brand-400 uppercase tracking-widest mb-1.5">E-mail de acesso *</label>
+                <input
+                  className="input-field"
+                  type="email"
+                  value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value.trim() }))}
+                  placeholder="email@exemplo.com"
+                  autoComplete="off"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-brand-400 uppercase tracking-widest mb-1.5">Senha de acesso *</label>
+                <div className="relative">
+                  <input
+                    className="input-field pr-10"
+                    type={showPw ? 'text' : 'password'}
+                    value={form.password}
+                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                    placeholder="Mínimo 6 caracteres"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-300 hover:text-brand-900 transition-colors"
+                  >
+                    {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+              <div>
                 <label className="block text-xs font-semibold text-brand-400 uppercase tracking-widest mb-1.5">Sigla (2 letras)</label>
                 <input className="input-field uppercase" maxLength={2} value={form.initials}
                   onChange={e => setForm(f => ({ ...f, initials: e.target.value.toUpperCase() }))}
@@ -253,7 +289,7 @@ export default function StaffList({ staff, bookings, onAdd, onUpdate, onDelete }
             </div>
 
             <div className="flex gap-3 mt-5">
-              <button onClick={handleSave} disabled={saving || !form.name.trim() || !form.role.trim()}
+              <button onClick={handleSave} disabled={saving || !form.name.trim() || !form.role.trim() || !form.email.trim() || !form.password.trim()}
                 className="btn-primary flex-1 flex items-center justify-center gap-2 py-2.5 text-sm disabled:opacity-40">
                 <Check size={14} />
                 {saving ? 'Salvando…' : modal === 'add' ? 'Adicionar' : 'Salvar'}
