@@ -3,6 +3,7 @@ import {
   getAllBookings,
   cancelBooking as svcCancel,
   updateBookingStatus as svcUpdateStatus,
+  updateBooking as svcUpdateBooking,
   updateClientByPhone as svcUpdate,
   deleteClientByPhone as svcDelete,
 } from '../utils/bookingService';
@@ -75,6 +76,11 @@ export function useBookings() {
     setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b));
   }, []);
 
+  const updateBooking = useCallback(async (id, patch) => {
+    await svcUpdateBooking(id, patch);
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, ...patch } : b));
+  }, []);
+
   const getTodayBookings = useCallback(() => {
     const key = dateToKey(new Date());
     return bookings.filter(b => b.dateKey === key && b.status !== 'cancelled');
@@ -139,6 +145,7 @@ export function useBookings() {
     loading,
     cancelBooking,
     updateBookingStatus,
+    updateBooking,
     updateClient,
     deleteClient,
     getTodayBookings,
