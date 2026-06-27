@@ -181,6 +181,28 @@ export async function cancelBooking(id) {
   return updateBookingStatus(id, 'cancelled');
 }
 
+export async function updateBooking(id, patch) {
+  const local = loadLocal();
+  const target = local.find(b => b.id === id);
+
+  // Invalida cache do dia se a duração mudar — libera/bloqueia slots corretamente
+  if (patch.totalDuration !== undefined && target?.dateKey) {
+    slotsCache.delete(target.dateKey);
+  }
+
+  const dbPatch = {};
+  if (patch.services      !== undefined) dbPatch.services       = patch.services;
+  if (patch.totalDuration !== undefined) dbPatch.total_duration = patch.totalDuration;
+  if (patch.totalPrice    !== undefined) dbPatch.total_price    = patch.totalPrice;
+  if (patch.timeSlot      !== undefined) dbPatch.time_slot      = patch.timeSlot;
+
+  if (supabase) {
+    const { error } = await supabase.from('bookings').update(dbPatch).eq('id', id);
+    if (error) console.error('[Supabase] updateBooking:', error.message);
+  }
+  saveLocal(local.map(b => b.id === id ? { ...b, ...patch } : b));
+}
+
 export async function updateClientByPhone(phone, updates) {
   const digits = phone.replace(/\D/g, '');
   if (supabase) {

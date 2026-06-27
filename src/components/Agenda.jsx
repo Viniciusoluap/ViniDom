@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, CheckCircle, XCircle } from 'lucide-react';
-import { DAY_NAMES_PT, MONTH_NAMES_PT } from '../utils/constants';
+import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Pencil, X } from 'lucide-react';
+import { DAY_NAMES_PT, MONTH_NAMES_PT, SERVICES } from '../utils/constants';
 import { formatTime, formatPrice } from '../utils/dateFormatter';
 import { dateToKey } from '../utils/dateFormatter';
 
@@ -9,9 +9,11 @@ const HOUR_END    = 19;
 const HOURS       = HOUR_END - HOUR_START;
 const PX_PER_HOUR = 72;
 
-export default function Agenda({ bookings, staff = [], onUpdateStatus }) {
+export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [staffFilter, setStaffFilter]   = useState('all');
+  const [editingBooking, setEditingBooking] = useState(null);
+  const [editServices, setEditServices]     = useState([]);
 
   const dayKey = dateToKey(selectedDate);
   const isToday = dayKey === dateToKey(new Date());
@@ -32,6 +34,35 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus }) {
     const d = new Date(selectedDate);
     d.setDate(d.getDate() + n);
     setSelectedDate(d);
+  };
+
+  const openEdit = (booking) => {
+    setEditingBooking(booking);
+    setEditServices(booking.services || []);
+  };
+
+  const closeEdit = () => {
+    setEditingBooking(null);
+    setEditServices([]);
+  };
+
+  const toggleService = (svc) => {
+    setEditServices(prev => {
+      const exists = prev.find(s => s.id === svc.id);
+      if (exists) {
+        if (prev.length === 1) return prev; // Mínimo 1 serviço
+        return prev.filter(s => s.id !== svc.id);
+      }
+      return [...prev, svc];
+    });
+  };
+
+  const saveEdit = () => {
+    if (!editingBooking || !editServices.length || !onEdit) return;
+    const totalDuration = editServices.reduce((s, sv) => s + sv.duration, 0);
+    const totalPrice    = editServices.reduce((s, sv) => s + sv.price, 0);
+    onEdit(editingBooking.id, { services: editServices, totalDuration, totalPrice });
+    closeEdit();
   };
 
   const dayName   = DAY_NAMES_PT[selectedDate.getDay()];
@@ -121,7 +152,7 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus }) {
                 Nenhum agendamento neste dia.
               </div>
             ) : (
-              dayBookings.map((b, idx) => {
+              dayBookings.map((b) => {
                 const startMin   = b.timeSlot - HOUR_START * 60;
                 const top        = (startMin / 60) * PX_PER_HOUR;
                 const height     = Math.max((b.totalDuration / 60) * PX_PER_HOUR, 32);
@@ -145,51 +176,69 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus }) {
                 return (
                   <div
                     key={b.id}
-                    className="absolute left-2 right-2 flex flex-col px-2 py-1.5 overflow-hidden group"
+                    className="absolute left-2 right-2 flex flex-col px-2 py-1.5 overflow-hidden"
                     style={{ top, height, backgroundColor: bg }}
                   >
+                    {/* Header row: nome + status + botão editar */}
                     <div className="flex items-start justify-between gap-1">
                       <p className="text-white text-xs font-bold leading-tight truncate">
                         {b.client?.name || '—'}
                       </p>
-                      {statusBadge}
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        {statusBadge}
+                        {onEdit && (
+                          <button
+                            onClick={e => { e.stopPropagation(); openEdit(b); }}
+                            className="text-white/60 hover:text-white transition-colors ml-0.5"
+                            title="Editar serviços"
+                          >
+                            <Pencil size={10} />
+                          </button>
+                        )}
+                      </div>
                     </div>
+
                     {height > 40 && (
-                      <p className="text-white/70 text-xs truncate leading-tight">
-                        {names}
-                      </p>
+                      <p className="text-white/70 text-xs truncate leading-tight">{names}</p>
                     )}
                     {height > 56 && (
                       <p className="text-white/60 text-xs">{hora} · {formatPrice(b.totalPrice || 0)}</p>
                     )}
-                    {height > 64 && onUpdateStatus && b.status === 'confirmed' && (
-                      <div className="mt-auto flex gap-1">
-                        <button
-                          onClick={e => { e.stopPropagation(); onUpdateStatus(b.id, 'attended'); }}
-                          className="flex items-center gap-0.5 bg-green-500/80 hover:bg-green-500 text-white text-xs px-1.5 py-0.5 transition-colors"
-                          title="Marcar como Atendido"
-                        >
-                          <CheckCircle size={10} /> OK
-                        </button>
-                        <button
-                          onClick={e => { e.stopPropagation(); onUpdateStatus(b.id, 'no_show'); }}
-                          className="flex items-center gap-0.5 bg-red-500/80 hover:bg-red-500 text-white text-xs px-1.5 py-0.5 transition-colors"
-                          title="Marcar como Faltou"
-                        >
-                          <XCircle size={10} /> X
-                        </button>
+
+                    {/* Botões de ação — WhatsApp sempre + OK/X quando disponível */}
+                    {height > 64 && b.status === 'confirmed' && (
+                      <div className="mt-auto flex gap-1 flex-wrap">
+                        {digits && (
+                          <a
+                            href={waLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="flex items-center gap-0.5 bg-white/20 hover:bg-white/30 text-white text-xs px-1.5 py-0.5 transition-colors"
+                            title="Confirmar via WhatsApp"
+                          >
+                            <WaIcon />
+                          </a>
+                        )}
+                        {onUpdateStatus && (
+                          <>
+                            <button
+                              onClick={e => { e.stopPropagation(); onUpdateStatus(b.id, 'attended'); }}
+                              className="flex items-center gap-0.5 bg-green-500/80 hover:bg-green-500 text-white text-xs px-1.5 py-0.5 transition-colors"
+                              title="Marcar como Atendido"
+                            >
+                              <CheckCircle size={10} /> OK
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); onUpdateStatus(b.id, 'no_show'); }}
+                              className="flex items-center gap-0.5 bg-red-500/80 hover:bg-red-500 text-white text-xs px-1.5 py-0.5 transition-colors"
+                              title="Marcar como Faltou"
+                            >
+                              <XCircle size={10} /> X
+                            </button>
+                          </>
+                        )}
                       </div>
-                    )}
-                    {digits && height > 40 && b.status === 'confirmed' && !onUpdateStatus && (
-                      <a
-                        href={waLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className="mt-auto flex items-center gap-1 bg-white/20 hover:bg-white/30 text-white text-xs px-1.5 py-0.5 w-fit transition-colors"
-                      >
-                        <WaIcon /> Confirmar
-                      </a>
                     )}
                   </div>
                 );
@@ -208,6 +257,81 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus }) {
               <span className="text-xs text-brand-400">{s.name}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Modal de edição de serviços ── */}
+      {editingBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white w-full max-w-sm max-h-[90vh] flex flex-col shadow-xl">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-brand-100">
+              <div>
+                <p className="font-bold text-brand-900 text-sm">Editar Serviços</p>
+                <p className="text-brand-400 text-xs">
+                  {editingBooking.client?.name} · {formatTime(editingBooking.timeSlot)}
+                </p>
+              </div>
+              <button onClick={closeEdit} className="p-1 text-brand-400 hover:text-brand-900 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Lista de serviços */}
+            <div className="overflow-y-auto flex-1 p-4 space-y-2">
+              {SERVICES.map(svc => {
+                const selected = !!editServices.find(s => s.id === svc.id);
+                return (
+                  <button
+                    key={svc.id}
+                    onClick={() => toggleService(svc)}
+                    className={`w-full flex items-center gap-3 p-3 border text-left transition-colors ${
+                      selected
+                        ? 'border-brand-900 bg-brand-900'
+                        : 'border-brand-100 hover:border-brand-300'
+                    }`}
+                  >
+                    <span className="text-lg shrink-0">{svc.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-semibold ${selected ? 'text-white' : 'text-brand-900'}`}>
+                        {svc.name}
+                      </p>
+                      <p className={`text-xs ${selected ? 'text-white/70' : 'text-brand-400'}`}>
+                        {svc.duration}min · {formatPrice(svc.price)}
+                        {svc.priceLabel && <span className="ml-1 opacity-75">({svc.priceLabel})</span>}
+                      </p>
+                    </div>
+                    {selected && <CheckCircle size={14} className="text-white shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Footer com total e botões */}
+            <div className="px-5 py-4 border-t border-brand-100">
+              <div className="flex justify-between text-sm mb-3">
+                <span className="text-brand-400 text-xs">Novo total</span>
+                <span className="font-bold text-brand-900 text-sm">
+                  {formatPrice(editServices.reduce((s, sv) => s + sv.price, 0))}
+                  <span className="text-brand-400 font-normal text-xs ml-1">
+                    · {editServices.reduce((s, sv) => s + sv.duration, 0)}min
+                  </span>
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={closeEdit} className="flex-1 btn-secondary text-sm py-2">
+                  Cancelar
+                </button>
+                <button
+                  onClick={saveEdit}
+                  disabled={!editServices.length}
+                  className="flex-1 btn-primary text-sm py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
