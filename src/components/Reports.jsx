@@ -110,10 +110,10 @@ export default function Reports({ bookings }) {
     [clients]
   );
 
-  // Follow-up: last visit > 15 days ago
+  // Follow-up: last visit > 10 days ago
   const followUp = useMemo(() => {
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 15);
+    cutoff.setDate(cutoff.getDate() - 10);
     return clients
       .filter(c => c.lastVisit && new Date(c.lastVisit) < cutoff)
       .sort((a, b) => new Date(a.lastVisit) - new Date(b.lastVisit));
@@ -333,7 +333,7 @@ export default function Reports({ bookings }) {
         <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-1">
           Follow-up — Clientes para Contatar
         </h2>
-        <p className="text-xs text-brand-300 mb-4">Clientes cuja última visita foi há mais de 15 dias.</p>
+        <p className="text-xs text-brand-300 mb-4">Clientes cuja última visita foi há mais de 10 dias.</p>
         {followUp.length === 0 ? (
           <div className="bg-white border border-brand-100 p-8 text-center text-brand-300 text-sm">
             Todos os clientes visitaram recentemente.
