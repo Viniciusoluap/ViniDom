@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Lock, CheckCircle, XCircle, Clock, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
-import { STAFF_PASSWORD, DAY_NAMES_PT, MONTH_NAMES_PT } from '../utils/constants';
+import { UserCircle, CheckCircle, XCircle, Clock, Calendar, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { DAY_NAMES_PT, MONTH_NAMES_PT } from '../utils/constants';
 import { useBookings } from '../hooks/useBookings';
 import { loadStaff } from '../utils/staffService';
 import { dateToKey, formatTime, formatPrice } from '../utils/dateFormatter';
@@ -13,8 +13,11 @@ const STATUS_LABELS = {
 
 export default function Funcionario() {
   const [authed, setAuthed] = useState(() => !!sessionStorage.getItem('staff_auth'));
+  const [email, setEmail]   = useState('');
   const [pw, setPw]         = useState('');
-  const [error, setError]   = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [error, setError]       = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [staffMember, setStaffMember] = useState(() => {
     try {
       const s = sessionStorage.getItem('staff_member');
@@ -24,17 +27,29 @@ export default function Funcionario() {
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   const { bookings, loading, updateBookingStatus } = useBookings();
-  const staffList = loadStaff();
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (!staffMember) { setError(true); return; }
-    if (pw === STAFF_PASSWORD) {
+    const staffList = loadStaff();
+    const found = staffList.find(
+      s => s.email && s.email.toLowerCase() === email.trim().toLowerCase() && s.password === pw
+    );
+    if (found) {
+      if (found.active === false) {
+        setError(true);
+        setErrorMsg('Acesso desativado. Entre em contato com o administrador.');
+        setPw('');
+        return;
+      }
+      // Não armazena a senha na sessão
+      const { password: _pwd, ...memberSafe } = found;
       sessionStorage.setItem('staff_auth', '1');
-      sessionStorage.setItem('staff_member', JSON.stringify(staffMember));
+      sessionStorage.setItem('staff_member', JSON.stringify(memberSafe));
+      setStaffMember(memberSafe);
       setAuthed(true);
     } else {
       setError(true);
+      setErrorMsg('E-mail ou senha incorretos.');
       setPw('');
     }
   };
@@ -44,7 +59,10 @@ export default function Funcionario() {
     sessionStorage.removeItem('staff_member');
     setAuthed(false);
     setStaffMember(null);
+    setEmail('');
     setPw('');
+    setError(false);
+    setErrorMsg('');
   };
 
   const shift = (n) => {
@@ -53,7 +71,6 @@ export default function Funcionario() {
     setSelectedDate(d);
   };
 
-  // Agendamentos filtrados pelo profissional logado e data selecionada
   const dayKey  = dateToKey(selectedDate);
   const isToday = dayKey === dateToKey(new Date());
 
@@ -93,7 +110,7 @@ export default function Funcionario() {
         <div className="w-full max-w-sm">
           <div className="flex items-center justify-center gap-3 mb-8">
             <div className="w-10 h-10 bg-brand-900 flex items-center justify-center">
-              <Lock size={18} className="text-white" />
+              <UserCircle size={18} className="text-white" />
             </div>
             <div>
               <p className="text-brand-900 font-semibold tracking-wide">Área do Funcionário</p>
@@ -103,39 +120,43 @@ export default function Funcionario() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-brand-400 uppercase tracking-widest mb-1.5">
-                Selecione seu nome
+                E-mail
               </label>
-              <select
-                value={staffMember?.id || ''}
-                onChange={e => {
-                  const found = staffList.find(s => String(s.id) === e.target.value);
-                  setStaffMember(found || null);
-                  setError(false);
-                }}
-                className={`input-field ${error && !staffMember ? 'border-red-400' : ''}`}
-              >
-                <option value="">— Selecione —</option>
-                {staffList.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+              <input
+                type="email"
+                value={email}
+                onChange={e => { setEmail(e.target.value); setError(false); setErrorMsg(''); }}
+                placeholder="seu@email.com"
+                autoFocus
+                autoComplete="email"
+                className={`input-field ${error ? 'border-red-400 focus:border-red-400' : ''}`}
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-brand-400 uppercase tracking-widest mb-1.5">
                 Senha
               </label>
-              <input
-                type="password"
-                value={pw}
-                onChange={e => { setPw(e.target.value); setError(false); }}
-                placeholder="Senha do funcionário"
-                autoFocus
-                className={`input-field ${error ? 'border-red-400 focus:border-red-400' : ''}`}
-              />
+              <div className="relative">
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  value={pw}
+                  onChange={e => { setPw(e.target.value); setError(false); setErrorMsg(''); }}
+                  placeholder="Sua senha de acesso"
+                  autoComplete="current-password"
+                  className={`input-field pr-10 ${error ? 'border-red-400 focus:border-red-400' : ''}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw(v => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-300 hover:text-brand-900 transition-colors"
+                >
+                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
             </div>
             {error && (
               <p className="text-red-500 text-xs tracking-wide -mt-2">
-                {!staffMember ? 'Selecione seu nome.' : 'Senha incorreta.'}
+                {errorMsg}
               </p>
             )}
             <button type="submit" className="btn-primary w-full text-center">Entrar</button>
@@ -256,7 +277,7 @@ function Section({ title, icon, children }) {
 }
 
 function BookingCard({ booking: b, onUpdateStatus, compact }) {
-  const services = b.services || (b.service ? [b.service] : []);
+  const services   = b.services || (b.service ? [b.service] : []);
   const statusInfo = STATUS_LABELS[b.status] || STATUS_LABELS.confirmed;
 
   return (
@@ -291,7 +312,6 @@ function BookingCard({ booking: b, onUpdateStatus, compact }) {
         </div>
       </div>
 
-      {/* Botões de status — apenas para agendamentos confirmados */}
       {b.status === 'confirmed' && (
         <div className="flex gap-2 pt-1">
           <button
@@ -309,7 +329,6 @@ function BookingCard({ booking: b, onUpdateStatus, compact }) {
         </div>
       )}
 
-      {/* Desfazer para confirmado */}
       {(b.status === 'attended' || b.status === 'no_show') && (
         <button
           onClick={() => onUpdateStatus(b.id, 'confirmed')}
