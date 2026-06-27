@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Pencil, X } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Pencil, X, Search, Trash2 } from 'lucide-react';
 import { DAY_NAMES_PT, MONTH_NAMES_PT, SERVICES } from '../utils/constants';
 import { formatTime, formatPrice } from '../utils/dateFormatter';
 import { dateToKey } from '../utils/dateFormatter';
@@ -14,7 +14,7 @@ const DAY_SHORT_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 function getWeekDays(date) {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day; // Monday start
+  const diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
   return Array.from({ length: 7 }, (_, i) => {
     const dd = new Date(d);
@@ -27,7 +27,7 @@ function getMonthGrid(date) {
   const year = date.getFullYear();
   const month = date.getMonth();
   const firstDay = new Date(year, month, 1);
-  const startOffset = firstDay.getDay(); // 0=Sun
+  const startOffset = firstDay.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells = [];
   for (let i = 0; i < startOffset; i++) cells.push(null);
@@ -36,13 +36,16 @@ function getMonthGrid(date) {
   return cells;
 }
 
-export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit }) {
+export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit, onCancel }) {
   const [viewMode, setViewMode]                = useState('day');
   const [selectedDate, setSelectedDate]        = useState(new Date());
   const [staffFilter, setStaffFilter]          = useState('all');
+  const [clientFilter, setClientFilter]        = useState('');
   const [selectedBooking, setSelectedBooking]  = useState(null);
   const [editingBooking, setEditingBooking]    = useState(null);
   const [editServices, setEditServices]        = useState([]);
+
+  const dateInputRef = useRef(null);
 
   const todayKey = dateToKey(new Date());
   const dayKey   = dateToKey(selectedDate);
@@ -56,13 +59,22 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit })
     setSelectedDate(d);
   };
 
+  const jumpToDate = (value) => {
+    if (!value) return;
+    setSelectedDate(new Date(value + 'T12:00:00'));
+  };
+
   const filteredBookings = useMemo(() =>
     bookings.filter(b => {
       if (b.status === 'cancelled') return false;
       if (staffFilter !== 'all' && b.professional !== staffFilter) return false;
+      if (clientFilter.trim()) {
+        const name = (b.client?.name || '').toLowerCase();
+        if (!name.includes(clientFilter.trim().toLowerCase())) return false;
+      }
       return true;
     }),
-    [bookings, staffFilter]
+    [bookings, staffFilter, clientFilter]
   );
 
   const dayBookings = useMemo(() =>
@@ -132,110 +144,152 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit })
     setViewMode('day');
   };
 
-  // Header label
-  let navLabel;
-  if (viewMode === 'day') {
-    const dn  = DAY_NAMES_PT[selectedDate.getDay()];
-    const num = selectedDate.getDate();
-    const mn  = MONTH_NAMES_PT[selectedDate.getMonth()];
-    navLabel = (
-      <div className="text-center min-w-[150px]">
-        <p className="font-bold text-brand-900 text-sm">
-          {isToday && <span className="text-gold-500">Hoje · </span>}
-          {dn}, {num} de {mn}
-        </p>
-        <p className="text-xs text-brand-300">
-          {selectedDate.getFullYear()} · {dayBookings.length} agend.
-        </p>
-      </div>
-    );
-  } else if (viewMode === 'week') {
-    const first = weekDays[0];
-    const last  = weekDays[6];
-    const sameMonth = first.getMonth() === last.getMonth();
-    const range = sameMonth
-      ? `${first.getDate()}–${last.getDate()} de ${MONTH_NAMES_PT[first.getMonth()]}`
-      : `${first.getDate()} ${MONTH_NAMES_PT[first.getMonth()].slice(0, 3)} – ${last.getDate()} ${MONTH_NAMES_PT[last.getMonth()].slice(0, 3)}`;
-    const total = weekDays.reduce((n, d) => n + (weekBookingsMap[dateToKey(d)]?.length || 0), 0);
-    navLabel = (
-      <div className="text-center min-w-[150px]">
-        <p className="font-bold text-brand-900 text-sm">{range}</p>
-        <p className="text-xs text-brand-300">{first.getFullYear()} · {total} agend.</p>
-      </div>
-    );
-  } else {
-    const total = filteredBookings.filter(b => {
-      const bDate = new Date(b.date);
-      return (
-        bDate.getFullYear() === selectedDate.getFullYear() &&
-        bDate.getMonth() === selectedDate.getMonth()
+  // Header date display — clicável para abrir seletor rápido de data
+  const DateDisplay = () => {
+    let label;
+    if (viewMode === 'day') {
+      const dn  = DAY_NAMES_PT[selectedDate.getDay()];
+      const num = selectedDate.getDate();
+      const mn  = MONTH_NAMES_PT[selectedDate.getMonth()];
+      label = (
+        <>
+          <p className="font-bold text-brand-900 text-sm underline decoration-dotted underline-offset-2 cursor-pointer">
+            {isToday && <span className="text-gold-500 no-underline">Hoje · </span>}
+            {dn}, {num} de {mn}
+          </p>
+          <p className="text-xs text-brand-300">{selectedDate.getFullYear()} · {dayBookings.length} agend.</p>
+        </>
       );
-    }).length;
-    navLabel = (
-      <div className="text-center min-w-[150px]">
-        <p className="font-bold text-brand-900 text-sm capitalize">
-          {MONTH_NAMES_PT[selectedDate.getMonth()]} {selectedDate.getFullYear()}
-        </p>
-        <p className="text-xs text-brand-300">{total} agend.</p>
+    } else if (viewMode === 'week') {
+      const first = weekDays[0];
+      const last  = weekDays[6];
+      const sameMonth = first.getMonth() === last.getMonth();
+      const range = sameMonth
+        ? `${first.getDate()}–${last.getDate()} de ${MONTH_NAMES_PT[first.getMonth()]}`
+        : `${first.getDate()} ${MONTH_NAMES_PT[first.getMonth()].slice(0, 3)} – ${last.getDate()} ${MONTH_NAMES_PT[last.getMonth()].slice(0, 3)}`;
+      const total = weekDays.reduce((n, d) => n + (weekBookingsMap[dateToKey(d)]?.length || 0), 0);
+      label = (
+        <>
+          <p className="font-bold text-brand-900 text-sm underline decoration-dotted underline-offset-2 cursor-pointer">{range}</p>
+          <p className="text-xs text-brand-300">{first.getFullYear()} · {total} agend.</p>
+        </>
+      );
+    } else {
+      const total = filteredBookings.filter(b => {
+        const bDate = new Date(b.date);
+        return bDate.getFullYear() === selectedDate.getFullYear() &&
+               bDate.getMonth() === selectedDate.getMonth();
+      }).length;
+      label = (
+        <>
+          <p className="font-bold text-brand-900 text-sm capitalize underline decoration-dotted underline-offset-2 cursor-pointer">
+            {MONTH_NAMES_PT[selectedDate.getMonth()]} {selectedDate.getFullYear()}
+          </p>
+          <p className="text-xs text-brand-300">{total} agend.</p>
+        </>
+      );
+    }
+
+    return (
+      <div className="relative text-center min-w-[150px]">
+        {/* Input escondido — abre o seletor nativo ao clicar na data */}
+        <input
+          ref={dateInputRef}
+          type="date"
+          value={dayKey}
+          onChange={e => jumpToDate(e.target.value)}
+          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+          style={{ zIndex: 1 }}
+        />
+        <div style={{ position: 'relative', zIndex: 0 }}>{label}</div>
       </div>
     );
-  }
+  };
 
   return (
     <div className="animate-fade-in space-y-4">
 
       {/* ── Header bar ── */}
-      <div className="flex flex-wrap items-center gap-3 bg-white border border-brand-100 p-4">
+      <div className="bg-white border border-brand-100 p-4 space-y-3">
 
-        {/* View toggle */}
-        <div className="flex border border-brand-100 overflow-hidden shrink-0">
-          {[['day', 'Dia'], ['week', 'Semana'], ['month', 'Mês']].map(([mode, label]) => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              className={`px-3 py-1.5 text-xs font-semibold tracking-wide transition-colors ${
-                viewMode === mode
-                  ? 'bg-brand-900 text-white'
-                  : 'text-brand-400 hover:text-brand-900 hover:bg-warm-50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* Linha 1: modo de visualização + navegação de data */}
+        <div className="flex flex-wrap items-center gap-3">
 
-        {/* Navigation */}
-        <div className="flex items-center gap-2">
-          <button onClick={() => shift(-1)}
-            className="p-2 border border-brand-100 text-brand-400 hover:text-brand-900 hover:border-brand-900 transition-all">
-            <ChevronLeft size={15} />
-          </button>
-          {navLabel}
-          <button onClick={() => shift(1)}
-            className="p-2 border border-brand-100 text-brand-400 hover:text-brand-900 hover:border-brand-900 transition-all">
-            <ChevronRight size={15} />
-          </button>
-        </div>
-
-        <button
-          onClick={() => { setSelectedDate(new Date()); setViewMode('day'); }}
-          className="btn-secondary py-1.5 text-xs px-3"
-        >
-          Hoje
-        </button>
-
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-brand-400 tracking-widest uppercase hidden sm:block">Profissional:</span>
-          <select
-            value={staffFilter}
-            onChange={e => setStaffFilter(e.target.value)}
-            className="input-field py-1.5 text-sm w-auto"
-          >
-            <option value="all">Todos</option>
-            {staff.map(s => (
-              <option key={s.id} value={s.name}>{s.name}</option>
+          {/* View toggle */}
+          <div className="flex border border-brand-100 overflow-hidden shrink-0">
+            {[['day', 'Dia'], ['week', 'Semana'], ['month', 'Mês']].map(([mode, label]) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`px-3 py-1.5 text-xs font-semibold tracking-wide transition-colors ${
+                  viewMode === mode
+                    ? 'bg-brand-900 text-white'
+                    : 'text-brand-400 hover:text-brand-900 hover:bg-warm-50'
+                }`}
+              >
+                {label}
+              </button>
             ))}
-          </select>
+          </div>
+
+          {/* Navigation */}
+          <div className="flex items-center gap-2">
+            <button onClick={() => shift(-1)}
+              className="p-2 border border-brand-100 text-brand-400 hover:text-brand-900 hover:border-brand-900 transition-all">
+              <ChevronLeft size={15} />
+            </button>
+            <DateDisplay />
+            <button onClick={() => shift(1)}
+              className="p-2 border border-brand-100 text-brand-400 hover:text-brand-900 hover:border-brand-900 transition-all">
+              <ChevronRight size={15} />
+            </button>
+          </div>
+
+          <button
+            onClick={() => { setSelectedDate(new Date()); setViewMode('day'); }}
+            className="btn-secondary py-1.5 text-xs px-3"
+          >
+            Hoje
+          </button>
+        </div>
+
+        {/* Linha 2: filtros */}
+        <div className="flex flex-wrap items-center gap-3">
+
+          {/* Busca por cliente */}
+          <div className="relative flex-1 min-w-[160px]">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-300 pointer-events-none" />
+            <input
+              type="text"
+              value={clientFilter}
+              onChange={e => setClientFilter(e.target.value)}
+              placeholder="Buscar cliente..."
+              className="input-field pl-8 py-1.5 text-sm w-full"
+            />
+            {clientFilter && (
+              <button
+                onClick={() => setClientFilter('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-300 hover:text-brand-900 transition-colors"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          {/* Filtro de profissional */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-brand-400 tracking-widest uppercase hidden sm:block">Profissional:</span>
+            <select
+              value={staffFilter}
+              onChange={e => setStaffFilter(e.target.value)}
+              className="input-field py-1.5 text-sm w-auto"
+            >
+              <option value="all">Todos</option>
+              {staff.map(s => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -291,6 +345,7 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit })
           onClose={() => setSelectedBooking(null)}
           onUpdateStatus={onUpdateStatus}
           onOpenEdit={onEdit ? () => openEdit(liveSelected) : null}
+          onCancel={onCancel ? (id) => { onCancel(id); setSelectedBooking(null); } : null}
         />
       )}
 
@@ -448,7 +503,7 @@ function WeekView({ weekDays, weekBookingsMap, staff, todayKey, onSelectBooking,
     <div className="bg-white border border-brand-100 overflow-x-auto">
       <div className="min-w-[560px]">
 
-        {/* Day headers — clicáveis para ir ao dia */}
+        {/* Day headers */}
         <div className="grid grid-cols-7 border-b border-brand-100">
           {weekDays.map((d, i) => {
             const key     = dateToKey(d);
@@ -474,17 +529,14 @@ function WeekView({ weekDays, weekBookingsMap, staff, todayKey, onSelectBooking,
           })}
         </div>
 
-        {/* Booking cards por dia */}
+        {/* Booking cards per day */}
         <div className="grid grid-cols-7 divide-x divide-brand-50">
           {weekDays.map((d, i) => {
             const key     = dateToKey(d);
             const dayBks  = weekBookingsMap[key] || [];
             const isToday = key === todayKey;
             return (
-              <div
-                key={i}
-                className={`min-h-[160px] p-1.5 space-y-1 ${isToday ? 'bg-brand-50/60' : ''}`}
-              >
+              <div key={i} className={`min-h-[160px] p-1.5 space-y-1 ${isToday ? 'bg-brand-50/60' : ''}`}>
                 {dayBks.length === 0 ? (
                   <p className="text-[10px] text-brand-200 text-center mt-8 select-none">—</p>
                 ) : (
@@ -524,8 +576,6 @@ const MONTH_DAY_HEADERS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 function MonthView({ monthGrid, monthBookingsMap, staff, todayKey, onGoToDay }) {
   return (
     <div className="bg-white border border-brand-100 overflow-hidden">
-
-      {/* Cabeçalho dos dias da semana */}
       <div className="grid grid-cols-7 border-b border-brand-100">
         {MONTH_DAY_HEADERS.map(d => (
           <div key={d} className="py-2 text-center text-[10px] font-semibold text-brand-400 uppercase tracking-widest border-r last:border-r-0 border-brand-50">
@@ -534,15 +584,11 @@ function MonthView({ monthGrid, monthBookingsMap, staff, todayKey, onGoToDay }) 
         ))}
       </div>
 
-      {/* Grid de dias */}
       <div className="grid grid-cols-7">
         {monthGrid.map((d, i) => {
           if (!d) {
             return (
-              <div
-                key={`empty-${i}`}
-                className="border-r last:border-r-0 border-b border-brand-50 min-h-[80px] bg-warm-50/50"
-              />
+              <div key={`empty-${i}`} className="border-r last:border-r-0 border-b border-brand-50 min-h-[80px] bg-warm-50/50" />
             );
           }
           const key     = dateToKey(d);
@@ -589,7 +635,9 @@ function MonthView({ monthGrid, monthBookingsMap, staff, todayKey, onGoToDay }) 
 }
 
 // ── Bottom sheet com detalhes e ações ──
-function BookingDetailSheet({ booking: b, onClose, onUpdateStatus, onOpenEdit }) {
+function BookingDetailSheet({ booking: b, onClose, onUpdateStatus, onOpenEdit, onCancel }) {
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
   const services = b.services || (b.service ? [b.service] : []);
   const names    = services.map(s => s.name).join(' + ');
   const hora     = formatTime(b.timeSlot);
@@ -719,6 +767,36 @@ function BookingDetailSheet({ booking: b, onClose, onUpdateStatus, onOpenEdit })
             >
               <Pencil size={13} /> Editar Serviços
             </button>
+          )}
+
+          {/* Cancelar agendamento */}
+          {onCancel && !confirmCancel && (
+            <button
+              onClick={() => setConfirmCancel(true)}
+              className="w-full flex items-center justify-center gap-2 border border-red-200 text-red-500 hover:border-red-400 hover:text-red-600 py-3 text-sm font-medium transition-colors"
+            >
+              <Trash2 size={13} /> Cancelar Agendamento
+            </button>
+          )}
+
+          {onCancel && confirmCancel && (
+            <div className="border border-red-200 p-3 space-y-2">
+              <p className="text-xs text-red-600 text-center font-medium">Confirmar cancelamento?</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirmCancel(false)}
+                  className="flex-1 py-2 text-xs font-semibold border border-brand-200 text-brand-700 hover:border-brand-900 transition-colors"
+                >
+                  Voltar
+                </button>
+                <button
+                  onClick={() => onCancel(b.id)}
+                  className="flex-1 py-2 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white transition-colors"
+                >
+                  Sim, cancelar
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>

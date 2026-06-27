@@ -172,6 +172,7 @@ export default function Admin() {
               staff={staff}
               onUpdateStatus={updateBookingStatus}
               onEdit={updateBooking}
+              onCancel={cancelBooking}
             />
       )}
       {activeTab === 'clientes'     && (
