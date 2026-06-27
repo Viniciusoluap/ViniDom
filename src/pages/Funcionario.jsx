@@ -16,7 +16,8 @@ export default function Funcionario() {
   const [email, setEmail]   = useState('');
   const [pw, setPw]         = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [error, setError]   = useState(false);
+  const [error, setError]       = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [staffMember, setStaffMember] = useState(() => {
     try {
       const s = sessionStorage.getItem('staff_member');
@@ -34,6 +35,12 @@ export default function Funcionario() {
       s => s.email && s.email.toLowerCase() === email.trim().toLowerCase() && s.password === pw
     );
     if (found) {
+      if (found.active === false) {
+        setError(true);
+        setErrorMsg('Acesso desativado. Entre em contato com o administrador.');
+        setPw('');
+        return;
+      }
       // Não armazena a senha na sessão
       const { password: _pwd, ...memberSafe } = found;
       sessionStorage.setItem('staff_auth', '1');
@@ -42,6 +49,7 @@ export default function Funcionario() {
       setAuthed(true);
     } else {
       setError(true);
+      setErrorMsg('E-mail ou senha incorretos.');
       setPw('');
     }
   };
@@ -53,6 +61,8 @@ export default function Funcionario() {
     setStaffMember(null);
     setEmail('');
     setPw('');
+    setError(false);
+    setErrorMsg('');
   };
 
   const shift = (n) => {
@@ -115,7 +125,7 @@ export default function Funcionario() {
               <input
                 type="email"
                 value={email}
-                onChange={e => { setEmail(e.target.value); setError(false); }}
+                onChange={e => { setEmail(e.target.value); setError(false); setErrorMsg(''); }}
                 placeholder="seu@email.com"
                 autoFocus
                 autoComplete="email"
@@ -130,7 +140,7 @@ export default function Funcionario() {
                 <input
                   type={showPw ? 'text' : 'password'}
                   value={pw}
-                  onChange={e => { setPw(e.target.value); setError(false); }}
+                  onChange={e => { setPw(e.target.value); setError(false); setErrorMsg(''); }}
                   placeholder="Sua senha de acesso"
                   autoComplete="current-password"
                   className={`input-field pr-10 ${error ? 'border-red-400 focus:border-red-400' : ''}`}
@@ -146,7 +156,7 @@ export default function Funcionario() {
             </div>
             {error && (
               <p className="text-red-500 text-xs tracking-wide -mt-2">
-                E-mail ou senha incorretos.
+                {errorMsg}
               </p>
             )}
             <button type="submit" className="btn-primary w-full text-center">Entrar</button>

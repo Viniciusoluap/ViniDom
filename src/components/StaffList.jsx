@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, X, Check, Eye, EyeOff } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Check, Eye, EyeOff, Power } from 'lucide-react';
 import { formatPrice, formatTime, dateToKey } from '../utils/dateFormatter';
 
 const PRESET_COLORS = [
@@ -115,7 +115,16 @@ export default function StaffList({ staff, bookings, onAdd, onUpdate, onDelete }
                 {member.initials}
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-brand-900 text-base">{member.name}</h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-bold text-brand-900 text-base">{member.name}</h3>
+                  <span className={`text-xs px-2 py-0.5 font-medium border ${
+                    member.active !== false
+                      ? 'bg-green-50 text-green-700 border-green-200'
+                      : 'bg-gray-100 text-gray-500 border-gray-200'
+                  }`}>
+                    {member.active !== false ? 'Ativo' : 'Inativo'}
+                  </span>
+                </div>
                 <p className="text-xs text-brand-400 tracking-widest uppercase mt-0.5">{member.role}</p>
                 {member.email && (
                   <p className="text-xs text-brand-300 mt-0.5">{member.email}</p>
@@ -138,12 +147,23 @@ export default function StaffList({ staff, bookings, onAdd, onUpdate, onDelete }
                 </div>
               </div>
 
-              {/* Edit / Delete */}
+              {/* Edit / Toggle active / Delete */}
               <div className="flex items-center gap-1 shrink-0">
                 <button onClick={() => openEdit(member)}
                   className="p-1.5 text-brand-300 hover:text-brand-900 border border-brand-100 hover:border-brand-900 transition-all"
                   title="Editar">
                   <Pencil size={14} />
+                </button>
+                <button
+                  onClick={() => onUpdate(member.id, { active: member.active === false })}
+                  className={`p-1.5 border transition-all ${
+                    member.active !== false
+                      ? 'text-green-500 hover:text-gray-400 border-green-200 hover:border-gray-200'
+                      : 'text-gray-400 hover:text-green-500 border-gray-200 hover:border-green-300'
+                  }`}
+                  title={member.active !== false ? 'Desativar colaborador' : 'Ativar colaborador'}
+                >
+                  <Power size={14} />
                 </button>
                 <button onClick={() => handleDelete(member)}
                   className="p-1.5 text-brand-300 hover:text-red-500 border border-brand-100 hover:border-red-300 transition-all"
