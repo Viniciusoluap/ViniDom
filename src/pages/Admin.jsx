@@ -4,7 +4,9 @@ import Agenda from '../components/Agenda';
 import ClientsList from '../components/ClientsList';
 import StaffList from '../components/StaffList';
 import Reports from '../components/Reports';
-import { BarChart3, Calendar, Users, Briefcase, TrendingUp, Lock, X } from 'lucide-react';
+import WhatsAppHub from '../components/WhatsAppHub';
+import Contabilidade from '../components/Contabilidade';
+import { BarChart3, Calendar, Users, Briefcase, TrendingUp, Lock, X, MessageCircle, Calculator } from 'lucide-react';
 import { ADMIN_PASSWORD, BUSINESS_HOURS, DAY_KEYS } from '../utils/constants';
 import { supabase } from '../lib/supabase';
 import { useBookings } from '../hooks/useBookings';
@@ -98,11 +100,13 @@ export default function Admin() {
   }
 
   const tabs = [
-    { id: 'dashboard',    label: 'Dashboard',    icon: <BarChart3  size={14} /> },
-    { id: 'agenda',       label: 'Agenda',        icon: <Calendar   size={14} /> },
-    { id: 'clientes',     label: 'Clientes',      icon: <Users      size={14} /> },
-    { id: 'funcionarios', label: 'Funcionários',  icon: <Briefcase  size={14} /> },
-    { id: 'relatorios',   label: 'Relatórios',    icon: <TrendingUp size={14} /> },
+    { id: 'dashboard',     label: 'Dashboard',     icon: <BarChart3     size={14} /> },
+    { id: 'agenda',        label: 'Agenda',         icon: <Calendar      size={14} /> },
+    { id: 'clientes',      label: 'Clientes',       icon: <Users         size={14} /> },
+    { id: 'funcionarios',  label: 'Funcionários',   icon: <Briefcase     size={14} /> },
+    { id: 'relatorios',    label: 'Relatórios',     icon: <TrendingUp    size={14} /> },
+    { id: 'whatsapp',      label: 'WhatsApp',       icon: <MessageCircle size={14} /> },
+    { id: 'contabilidade', label: 'Contabilidade',  icon: <Calculator    size={14} /> },
   ];
 
   return (
@@ -185,10 +189,20 @@ export default function Admin() {
           ? <div className="text-center py-16 text-brand-300 text-sm">Carregando funcionários...</div>
           : <StaffList bookings={bookings} staff={staff} onAdd={addMember} onUpdate={updateMember} onDelete={deleteMember} />
       )}
-      {activeTab === 'relatorios'   && (
+      {activeTab === 'relatorios'    && (
         loading
           ? <div className="text-center py-16 text-brand-300 text-sm">Carregando relatórios...</div>
           : <Reports bookings={bookings} />
+      )}
+      {activeTab === 'whatsapp'      && (
+        loading
+          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando...</div>
+          : <WhatsAppHub bookings={bookings} />
+      )}
+      {activeTab === 'contabilidade' && (
+        loading
+          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando...</div>
+          : <Contabilidade bookings={bookings} />
       )}
 
       {/* Modal automático de confirmações do dia (dispara às 9h) */}
