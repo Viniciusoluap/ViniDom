@@ -104,8 +104,8 @@ export default function Admin() {
     { id: 'agenda',        label: 'Agenda',         icon: <Calendar      size={14} /> },
     { id: 'clientes',      label: 'Clientes',       icon: <Users         size={14} /> },
     { id: 'funcionarios',  label: 'Funcionários',   icon: <Briefcase     size={14} /> },
-    { id: 'relatorios',    label: 'Relatórios',     icon: <TrendingUp    size={14} /> },
     { id: 'whatsapp',      label: 'WhatsApp',       icon: <MessageCircle size={14} /> },
+    { id: 'relatorios',    label: 'Relatórios',     icon: <TrendingUp    size={14} /> },
     { id: 'contabilidade', label: 'Contabilidade',  icon: <Calculator    size={14} /> },
   ];
 
