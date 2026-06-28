@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { UserCircle, CheckCircle, XCircle, Clock, Calendar, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { UserCircle, CheckCircle, XCircle, Clock, Calendar, ChevronLeft, ChevronRight, Eye, EyeOff, BarChart3 } from 'lucide-react';
 import { DAY_NAMES_PT, MONTH_NAMES_PT } from '../utils/constants';
 import { useBookings } from '../hooks/useBookings';
 import { loadStaff } from '../utils/staffService';
@@ -10,6 +10,11 @@ const STATUS_LABELS = {
   attended:  { label: 'Atendido',   cls: 'bg-green-50 text-green-700 border-green-200' },
   no_show:   { label: 'Faltou',     cls: 'bg-red-50 text-red-700 border-red-200' },
 };
+
+const TABS = [
+  { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 size={14} /> },
+  { id: 'agenda',    label: 'Agenda',    icon: <Calendar  size={14} /> },
+];
 
 export default function Funcionario() {
   const [authed, setAuthed] = useState(() => !!sessionStorage.getItem('staff_auth'));
@@ -24,6 +29,7 @@ export default function Funcionario() {
       return s ? JSON.parse(s) : null;
     } catch { return null; }
   });
+  const [activeTab, setActiveTab]     = useState('dashboard');
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   const { bookings, loading, updateBookingStatus } = useBookings();
@@ -41,7 +47,6 @@ export default function Funcionario() {
         setPw('');
         return;
       }
-      // Não armazena a senha na sessão
       const { password: _pwd, ...memberSafe } = found;
       sessionStorage.setItem('staff_auth', '1');
       sessionStorage.setItem('staff_member', JSON.stringify(memberSafe));
@@ -73,24 +78,22 @@ export default function Funcionario() {
 
   const dayKey  = dateToKey(selectedDate);
   const isToday = dayKey === dateToKey(new Date());
+  const todayKey = dateToKey(new Date());
 
-  const dayBookings = useMemo(() => {
+  const myBookings = useMemo(() => {
     if (!staffMember) return [];
-    return bookings
-      .filter(b =>
-        b.status !== 'cancelled' &&
-        b.dateKey === dayKey &&
-        b.professional === staffMember.name
-      )
-      .sort((a, b) => a.timeSlot - b.timeSlot);
-  }, [bookings, dayKey, staffMember]);
+    return bookings.filter(b => b.status !== 'cancelled' && b.professional === staffMember.name);
+  }, [bookings, staffMember]);
+
+  const dayBookings = useMemo(() =>
+    myBookings.filter(b => b.dateKey === dayKey).sort((a, b) => a.timeSlot - b.timeSlot),
+    [myBookings, dayKey]
+  );
 
   const upcomingBookings = useMemo(() => {
-    if (!staffMember) return [];
     const now = new Date();
-    return bookings
+    return myBookings
       .filter(b => {
-        if (b.status === 'cancelled' || b.professional !== staffMember.name) return false;
         const d = new Date(b.date);
         d.setHours(Math.floor(b.timeSlot / 60), b.timeSlot % 60, 0, 0);
         return d >= now;
@@ -100,8 +103,31 @@ export default function Funcionario() {
         const db = new Date(b.date); db.setHours(Math.floor(b.timeSlot / 60), b.timeSlot % 60, 0, 0);
         return da - db;
       })
-      .slice(0, 20);
-  }, [bookings, staffMember]);
+      .slice(0, 10);
+  }, [myBookings]);
+
+  // Dashboard stats
+  const statsToday = useMemo(() =>
+    myBookings.filter(b => b.dateKey === todayKey).length,
+    [myBookings, todayKey]
+  );
+  const now = new Date();
+  const statsMonth = useMemo(() =>
+    myBookings.filter(b => {
+      const d = new Date(b.date);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }).length,
+    [myBookings]
+  );
+  const statsRevenue = useMemo(() =>
+    myBookings
+      .filter(b => {
+        const d = new Date(b.date);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && b.status === 'attended';
+      })
+      .reduce((s, b) => s + (b.totalPrice || 0), 0),
+    [myBookings]
+  );
 
   // ── Tela de login ──
   if (!authed) {
@@ -155,9 +181,7 @@ export default function Funcionario() {
               </div>
             </div>
             {error && (
-              <p className="text-red-500 text-xs tracking-wide -mt-2">
-                {errorMsg}
-              </p>
+              <p className="text-red-500 text-xs tracking-wide -mt-2">{errorMsg}</p>
             )}
             <button type="submit" className="btn-primary w-full text-center">Entrar</button>
           </form>
@@ -196,12 +220,71 @@ export default function Funcionario() {
         </button>
       </div>
 
+      {/* Tabs — apenas Dashboard e Agenda */}
+      <div className="flex gap-1 mb-6 border-b border-brand-100 overflow-x-auto">
+        {TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold tracking-widest uppercase transition-colors border-b-2 -mb-px whitespace-nowrap shrink-0 ${
+              activeTab === tab.id
+                ? 'bg-brand-900 text-white border-brand-900'
+                : 'text-brand-500 border-transparent hover:text-brand-900 hover:border-brand-200'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {loading && (
-        <div className="text-center py-10 text-brand-300 text-sm">Carregando agenda...</div>
+        <div className="text-center py-10 text-brand-300 text-sm">Carregando...</div>
       )}
 
-      {!loading && (
-        <div className="space-y-6">
+      {/* ── Dashboard Tab ── */}
+      {!loading && activeTab === 'dashboard' && (
+        <div className="space-y-6 animate-fade-in">
+
+          {/* Stats cards */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white border border-brand-100 p-4 text-center">
+              <p className="text-2xl font-bold text-brand-900">{statsToday}</p>
+              <p className="text-xs text-brand-400 uppercase tracking-widest mt-1">Hoje</p>
+            </div>
+            <div className="bg-white border border-brand-100 p-4 text-center">
+              <p className="text-2xl font-bold text-brand-900">{statsMonth}</p>
+              <p className="text-xs text-brand-400 uppercase tracking-widest mt-1">Este mês</p>
+            </div>
+            <div className="bg-white border border-brand-100 p-4 text-center">
+              <p className="text-lg font-bold text-gold-500 leading-tight mt-0.5">{formatPrice(statsRevenue)}</p>
+              <p className="text-xs text-brand-400 uppercase tracking-widest mt-1">Receita/mês</p>
+            </div>
+          </div>
+
+          {/* Próximos agendamentos */}
+          <Section title="Próximos Agendamentos" icon={<Clock size={15} />}>
+            {upcomingBookings.length === 0 ? (
+              <p className="text-brand-300 text-sm text-center py-8">Nenhum agendamento futuro.</p>
+            ) : (
+              <div className="space-y-3">
+                {upcomingBookings.map(b => (
+                  <BookingCard
+                    key={b.id}
+                    booking={b}
+                    onUpdateStatus={updateBookingStatus}
+                    compact
+                  />
+                ))}
+              </div>
+            )}
+          </Section>
+        </div>
+      )}
+
+      {/* ── Agenda Tab ── */}
+      {!loading && activeTab === 'agenda' && (
+        <div className="space-y-6 animate-fade-in">
 
           {/* Navegação de data */}
           <div className="flex items-center gap-3 bg-white border border-brand-100 p-4">
@@ -214,7 +297,9 @@ export default function Funcionario() {
                 {isToday && <span className="text-gold-500">Hoje · </span>}
                 {dayName}, {dayNum} de {monthName}
               </p>
-              <p className="text-xs text-brand-300">{year} · {dayBookings.length} agendamento{dayBookings.length !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-brand-300">
+                {year} · {dayBookings.length} agendamento{dayBookings.length !== 1 ? 's' : ''}
+              </p>
             </div>
             <button onClick={() => shift(1)}
               className="p-2 border border-brand-100 text-brand-400 hover:text-brand-900 hover:border-brand-900 transition-all">
@@ -242,22 +327,6 @@ export default function Funcionario() {
               </div>
             )}
           </Section>
-
-          {/* Próximos */}
-          {upcomingBookings.length > 0 && (
-            <Section title="Próximos Agendamentos" icon={<Clock size={15} />}>
-              <div className="space-y-3">
-                {upcomingBookings.map(b => (
-                  <BookingCard
-                    key={b.id}
-                    booking={b}
-                    onUpdateStatus={updateBookingStatus}
-                    compact
-                  />
-                ))}
-              </div>
-            </Section>
-          )}
         </div>
       )}
     </div>
@@ -291,16 +360,12 @@ function BookingCard({ booking: b, onUpdateStatus, compact }) {
                 {services.map(s => s.name).join(' + ')}
               </p>
               <p className="text-brand-700 text-sm font-medium mt-0.5">{b.client?.name || '—'}</p>
-              {!compact && (
-                <p className="text-brand-400 text-xs mt-0.5">
-                  {new Date(b.date).toLocaleDateString('pt-BR')} · {formatTime(b.timeSlot)}
-                </p>
-              )}
-              {compact && (
-                <p className="text-brand-400 text-xs mt-0.5">
-                  {new Date(b.date).toLocaleDateString('pt-BR')} às {formatTime(b.timeSlot)}
-                </p>
-              )}
+              <p className="text-brand-400 text-xs mt-0.5">
+                {compact
+                  ? `${new Date(b.date).toLocaleDateString('pt-BR')} às ${formatTime(b.timeSlot)}`
+                  : `${new Date(b.date).toLocaleDateString('pt-BR')} · ${formatTime(b.timeSlot)}`
+                }
+              </p>
             </div>
             <div className="text-right shrink-0">
               <p className="font-bold text-brand-900 text-sm">{formatPrice(b.totalPrice || 0)}</p>
