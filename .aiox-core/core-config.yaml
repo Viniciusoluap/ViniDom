@@ -1,0 +1,86 @@
+markdownExploder: true
+project:
+  type: EXISTING_PROJECT
+  name: ViniDom
+  description: Sistema de agendamento para salão de beleza — Vinicius Cavalcante Visagismo
+  installedAt: '2026-06-28T00:00:00Z'
+  version: 2.1.0
+user_profile: bob
+language: pt
+
+prd:
+  prdFile: docs/prd.md
+  prdVersion: v4
+  prdSharded: false
+
+architecture:
+  architectureFile: docs/architecture.md
+  architectureVersion: v4
+  architectureSharded: false
+
+devLoadAlwaysFiles: []
+devLoadAlwaysFilesFallback: []
+devDebugLog: .ai/debug-log.md
+devStoryLocation: docs/stories
+
+slashPrefix: AIOX
+toolsLocation: .aiox-core/tools
+scriptsLocation:
+  core: .aiox-core/core
+  development: .aiox-core/development/scripts
+  infrastructure: .aiox-core/infrastructure/scripts
+dataLocation: .aiox-core/data
+elicitationLocation: .aiox-core/elicitation
+
+ide:
+  selected:
+    - claude-code
+  configs:
+    claude-code: true
+    vscode: false
+    codex: false
+    gemini: false
+    cursor: false
+    zed: false
+    claude-desktop: false
+
+mcp:
+  enabled: false
+
+git:
+  showConfigWarning: false
+  cacheTimeSeconds: 300
+
+decisionLogging:
+  enabled: false
+
+projectStatus:
+  enabled: true
+  autoLoadOnAgentActivation: true
+  showInGreeting: true
+  cacheTimeSeconds: 60
+  statusFile: .aiox/project-status.yaml
+  maxModifiedFiles: 5
+  maxRecentCommits: 3
+
+github:
+  enabled: true
+  cli_required: false
+  features:
+    pr_creation: true
+  pr:
+    title_format: conventional
+    draft_by_default: true
+
+boundary:
+  frameworkProtection: false
+
+models:
+  active: claude-sonnet-4-6
+  registry:
+    claude-sonnet-4-6:
+      contextWindow: 200000
+      avgTokensPerPrompt: 1500
+    claude-haiku-4-5:
+      contextWindow: 200000
+      avgTokensPerPrompt: 1200
