@@ -14,5 +14,11 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script type="module">
+      import BubbleChat from 'https://agent-factory-chat.hostgator.io/scripts/start-chat.js';
+      const hashId = 'dde6ebbe-5ff5-40fa-b476-1970348ed108';
+      const bubbleChat = new BubbleChat(hashId, 'prod');
+      bubbleChat.open();
+    </script>
   </body>
 </html>
