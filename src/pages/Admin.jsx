@@ -7,14 +7,16 @@ import Reports from '../components/Reports';
 import WhatsAppHub from '../components/WhatsAppHub';
 import Contabilidade from '../components/Contabilidade';
 import { BarChart3, Calendar, Users, Briefcase, TrendingUp, Lock, X, MessageCircle, Calculator } from 'lucide-react';
-import { ADMIN_PASSWORD, BUSINESS_HOURS, DAY_KEYS } from '../utils/constants';
+import { BUSINESS_HOURS, DAY_KEYS } from '../utils/constants';
 import { supabase } from '../lib/supabase';
 import { useBookings } from '../hooks/useBookings';
 import { useStaff } from '../hooks/useStaff';
 import { dateToKey, formatTime } from '../utils/dateFormatter';
 
 export default function Admin() {
-  const [authed, setAuthed] = useState(() => !!sessionStorage.getItem('admin_auth'));
+  const [authed, setAuthed] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [email, setEmail]   = useState('');
   const [pw, setPw]         = useState('');
   const [error, setError]   = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -24,6 +26,38 @@ export default function Admin() {
 
   const { bookings, loading, cancelBooking, updateBookingStatus, updateBooking, updateClient, deleteClient } = useBookings();
   const { staff, addMember, updateMember, deleteMember } = useStaff();
+
+  useEffect(() => {
+    // Remove apenas a marca de sessão legada; ela nunca é usada como autorização.
+    sessionStorage.removeItem('admin_auth');
+    if (!supabase) {
+      queueMicrotask(() => setAuthReady(true));
+      return undefined;
+    }
+
+    let active = true;
+    const applySession = (session) => {
+      const allowed = session?.user?.app_metadata?.role === 'admin';
+      if (session && !allowed) {
+        void supabase.auth.signOut();
+      }
+      if (active) {
+        setAuthed(allowed);
+        setAuthReady(true);
+      }
+    };
+
+    supabase.auth.getSession().then(({ data }) => applySession(data.session));
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      applySession(session);
+    });
+
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   // Ref para leitura dos agendamentos dentro do interval sem stale closure
   const bookingsRef = useRef(bookings);
@@ -58,16 +92,29 @@ export default function Admin() {
     return () => clearInterval(id);
   }, [authed]);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (pw === ADMIN_PASSWORD) {
-      sessionStorage.setItem('admin_auth', '1');
-      setAuthed(true);
-    } else {
+    setError(false);
+    if (!supabase) {
+      setError(true);
+      return;
+    }
+
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: pw,
+    });
+    if (authError) {
       setError(true);
       setPw('');
     }
   };
+
+  if (!authReady) return (
+    <div className="flex-1 flex items-center justify-center pt-24">
+      <div className="w-6 h-6 border-2 border-brand-900 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   if (!authed) {
     return (
@@ -84,14 +131,23 @@ export default function Admin() {
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <input
+              type="email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setError(false); }}
+              placeholder="E-mail administrativo"
+              autoComplete="username"
+              autoFocus
+              className={`input-field ${error ? 'border-red-400 focus:border-red-400' : ''}`}
+            />
+            <input
               type="password"
               value={pw}
               onChange={(e) => { setPw(e.target.value); setError(false); }}
               placeholder="Senha"
-              autoFocus
+              autoComplete="current-password"
               className={`input-field ${error ? 'border-red-400 focus:border-red-400' : ''}`}
             />
-            {error && <p className="text-red-500 text-xs tracking-wide -mt-2">Senha incorreta.</p>}
+            {error && <p className="text-red-500 text-xs tracking-wide -mt-2">E-mail ou senha incorretos, ou Supabase Auth não configurado.</p>}
             <button type="submit" className="btn-primary w-full text-center">Entrar</button>
           </form>
         </div>
@@ -123,7 +179,7 @@ export default function Admin() {
           </div>
         </div>
         <button
-          onClick={() => { sessionStorage.removeItem('admin_auth'); setAuthed(false); }}
+          onClick={async () => { await supabase?.auth.signOut(); setAuthed(false); }}
           className="text-xs text-brand-400 hover:text-brand-900 tracking-widest uppercase transition-colors"
         >
           Sair

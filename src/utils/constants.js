@@ -116,9 +116,6 @@ export const CANCELLATION_POLICY = {
   text: 'Cancelamentos devem ser feitos com no mínimo 2 horas de antecedência.',
 };
 
-export const ADMIN_PASSWORD = 'domconcept2024';
-export const STAFF_PASSWORD = 'vcfuncionario2024';
-
 export const STAFF = [
   { id: 1, name: 'Vinicius Cavalcante', role: 'Visagista & Hair Expert', color: '#1a1a2e', initials: 'VC' },
 ];
