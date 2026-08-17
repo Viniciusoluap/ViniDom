@@ -137,7 +137,7 @@ export async function getAllBookings() {
       .order('created_at', { ascending: false });
     if (error) {
       console.error('[Supabase] getAllBookings:', error.message);
-      return [];
+      throw error;
     }
     return (data || []).map(mapRow);
   }

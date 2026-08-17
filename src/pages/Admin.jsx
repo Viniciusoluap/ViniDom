@@ -24,7 +24,17 @@ export default function Admin() {
   const [showDailyConfirm, setShowDailyConfirm]       = useState(false);
   const [dailyConfirmBookings, setDailyConfirmBookings] = useState([]);
 
-  const { bookings, loading, cancelBooking, updateBookingStatus, updateBooking, updateClient, deleteClient } = useBookings();
+  const {
+    bookings,
+    loading,
+    error: bookingsError,
+    reload: reloadBookings,
+    cancelBooking,
+    updateBookingStatus,
+    updateBooking,
+    updateClient,
+    deleteClient,
+  } = useBookings(authed);
   const { staff, addMember, updateMember, deleteMember } = useStaff();
 
   useEffect(() => {
@@ -165,6 +175,12 @@ export default function Admin() {
     { id: 'contabilidade', label: 'Contabilidade',  icon: <Calculator    size={14} /> },
   ];
 
+  const renderBookingsTab = (loadingMessage, content) => {
+    if (loading) return <div className="text-center py-16 text-brand-300 text-sm">{loadingMessage}</div>;
+    if (bookingsError) return <BookingsLoadError message={bookingsError} onRetry={reloadBookings} />;
+    return content;
+  };
+
   return (
     <div className="flex-1 pt-24 pb-16 px-6 max-w-6xl mx-auto w-full animate-fade-in">
       {/* Header */}
@@ -219,46 +235,39 @@ export default function Admin() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'dashboard'    && (
-        loading
-          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando...</div>
-          : <Dashboard bookings={bookings} onCancel={cancelBooking} />
+      {activeTab === 'dashboard' && renderBookingsTab(
+        'Carregando...',
+        <Dashboard bookings={bookings} onCancel={cancelBooking} />
       )}
-      {activeTab === 'agenda'       && (
-        loading
-          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando agenda...</div>
-          : <Agenda
-              bookings={bookings}
-              staff={staff}
-              onUpdateStatus={updateBookingStatus}
-              onEdit={updateBooking}
-              onCancel={cancelBooking}
-            />
+      {activeTab === 'agenda' && renderBookingsTab(
+        'Carregando agenda...',
+        <Agenda
+          bookings={bookings}
+          staff={staff}
+          onUpdateStatus={updateBookingStatus}
+          onEdit={updateBooking}
+          onCancel={cancelBooking}
+        />
       )}
-      {activeTab === 'clientes'     && (
-        loading
-          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando clientes...</div>
-          : <ClientsList bookings={bookings} onUpdate={updateClient} onDelete={deleteClient} />
+      {activeTab === 'clientes' && renderBookingsTab(
+        'Carregando clientes...',
+        <ClientsList bookings={bookings} onUpdate={updateClient} onDelete={deleteClient} />
       )}
-      {activeTab === 'funcionarios' && (
-        loading
-          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando funcionários...</div>
-          : <StaffList bookings={bookings} staff={staff} onAdd={addMember} onUpdate={updateMember} onDelete={deleteMember} />
+      {activeTab === 'funcionarios' && renderBookingsTab(
+        'Carregando funcionários...',
+        <StaffList bookings={bookings} staff={staff} onAdd={addMember} onUpdate={updateMember} onDelete={deleteMember} />
       )}
-      {activeTab === 'relatorios'    && (
-        loading
-          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando relatórios...</div>
-          : <Reports bookings={bookings} />
+      {activeTab === 'relatorios' && renderBookingsTab(
+        'Carregando relatórios...',
+        <Reports bookings={bookings} />
       )}
-      {activeTab === 'whatsapp'      && (
-        loading
-          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando...</div>
-          : <WhatsAppHub bookings={bookings} />
+      {activeTab === 'whatsapp' && renderBookingsTab(
+        'Carregando...',
+        <WhatsAppHub bookings={bookings} />
       )}
-      {activeTab === 'contabilidade' && (
-        loading
-          ? <div className="text-center py-16 text-brand-300 text-sm">Carregando...</div>
-          : <Contabilidade bookings={bookings} />
+      {activeTab === 'contabilidade' && renderBookingsTab(
+        'Carregando...',
+        <Contabilidade bookings={bookings} />
       )}
 
       {/* Modal automático de confirmações do dia (dispara às 9h) */}
@@ -268,6 +277,19 @@ export default function Admin() {
           onClose={() => setShowDailyConfirm(false)}
         />
       )}
+    </div>
+  );
+}
+
+function BookingsLoadError({ message, onRetry }) {
+  return (
+    <div className="bg-red-50 border border-red-200 px-5 py-6 text-center">
+      <p className="text-sm font-semibold text-red-800">Não foi possível carregar os agendamentos.</p>
+      <p className="text-xs text-red-600 mt-1">Os dados não foram substituídos por uma lista vazia.</p>
+      <p className="text-[11px] text-red-500 mt-2 break-words">{message}</p>
+      <button onClick={onRetry} className="btn-secondary mt-4 py-1.5 px-4 text-xs">
+        Tentar novamente
+      </button>
     </div>
   );
 }

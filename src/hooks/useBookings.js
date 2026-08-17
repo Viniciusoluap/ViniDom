@@ -10,19 +10,39 @@ import {
 import { supabase } from '../lib/supabase';
 import { dateToKey } from '../utils/dateFormatter';
 
-export function useBookings() {
+export function useBookings(enabled = true) {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    const load = () =>
-      getAllBookings().then(data => {
-        if (!cancelled) { setBookings(data); setLoading(false); }
+    if (!enabled) {
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setBookings([]);
+        setError(null);
+        setLoading(false);
       });
+      return () => { cancelled = true; };
+    }
 
-    load();
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getAllBookings();
+        if (!cancelled) setBookings(data);
+      } catch (err) {
+        console.error('[useBookings] load:', err);
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Não foi possível carregar os agendamentos.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void load();
 
     if (supabase) {
       let pollId = null;
@@ -33,7 +53,7 @@ export function useBookings() {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'bookings' },
-          () => { if (!cancelled) getAllBookings().then(data => { if (!cancelled) setBookings(data); }); }
+          () => { if (!cancelled) void load(); }
         )
         .subscribe(status => {
           if (status === 'SUBSCRIBED') {
@@ -43,7 +63,7 @@ export function useBookings() {
             // Realtime falhou — inicia polling a cada 10s como fallback
             if (!pollId) {
               pollId = setInterval(() => {
-                if (!cancelled) load();
+                if (!cancelled) void load();
               }, 10000);
             }
           }
@@ -64,7 +84,22 @@ export function useBookings() {
 
     // Sem Supabase: localStorage é local, sem necessidade de sync
     return () => { cancelled = true; };
-  }, []);
+  }, [enabled]);
+
+  const reload = useCallback(async () => {
+    if (!enabled) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getAllBookings();
+      setBookings(data);
+    } catch (err) {
+      console.error('[useBookings] reload:', err);
+      setError(err instanceof Error ? err.message : 'Não foi possível carregar os agendamentos.');
+    } finally {
+      setLoading(false);
+    }
+  }, [enabled]);
 
   const cancelBooking = useCallback(async (id) => {
     await svcCancel(id);
@@ -148,6 +183,8 @@ export function useBookings() {
     updateBooking,
     updateClient,
     deleteClient,
+    error,
+    reload,
     getTodayBookings,
     getMonthBookings,
     getMostBookedService,
