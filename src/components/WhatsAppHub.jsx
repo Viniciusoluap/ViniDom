@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
-import { Pencil, Check, X, MessageCircle, RefreshCw, Send, Users, Wifi, WifiOff, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Pencil, Check, X, RefreshCw, Send, Users, Wifi, WifiOff, Search } from 'lucide-react';
 import { formatDateLong } from '../utils/dateFormatter';
+import { supabase } from '../lib/supabase';
 
-const STORAGE_KEY    = 'vcvisagismo_wa_templates';
-const API_CREDS_KEY  = 'vcvisagismo_wa_api_creds';
+const STORAGE_KEY = 'vcvisagismo_wa_templates';
 
 const DEFAULT_TEMPLATES = [
   {
@@ -35,11 +35,6 @@ function loadTemplates() {
 
 function saveTemplates(templates) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
-}
-
-function loadCreds() {
-  try { return JSON.parse(localStorage.getItem(API_CREDS_KEY) || '{}'); }
-  catch { return {}; }
 }
 
 function buildClientMap(bookings) {
@@ -81,12 +76,10 @@ export default function WhatsAppHub({ bookings }) {
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText]   = useState('');
 
-  /* ── API Credentials ── */
-  const [creds, setCreds]           = useState(loadCreds);
-  const [formToken, setFormToken]   = useState(() => loadCreds().token   || '');
-  const [formPhoneId, setFormPhoneId] = useState(() => loadCreds().phoneId || '');
-  const [formPhone, setFormPhone]   = useState(() => loadCreds().phone   || '');
-  const [credsSaved, setCredsSaved] = useState(false);
+  /* ── Server-side API status ── */
+  const [isConnected, setIsConnected] = useState(false);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configMessage, setConfigMessage] = useState('');
 
   /* ── Bulk send ── */
   const [bulkSearch, setBulkSearch]         = useState('');
@@ -96,8 +89,56 @@ export default function WhatsAppHub({ bookings }) {
   const [sending, setSending]               = useState(false);
   const [sendLog, setSendLog]               = useState(null);
 
-  const clients     = useMemo(() => buildClientMap(bookings), [bookings]);
-  const isConnected = !!(creds.token && creds.phoneId);
+  const clients = useMemo(() => buildClientMap(bookings), [bookings]);
+
+  useEffect(() => {
+    let active = true;
+    const checkServerConfig = async () => {
+      setConfigLoading(true);
+      setConfigMessage('');
+      if (!supabase) {
+        if (active) {
+          setIsConnected(false);
+          setConfigMessage('Supabase Auth não está configurado.');
+          setConfigLoading(false);
+        }
+        return;
+      }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        if (active) {
+          setIsConnected(false);
+          setConfigMessage('Faça login novamente para verificar a configuração.');
+          setConfigLoading(false);
+        }
+        return;
+      }
+      try {
+        const response = await fetch('/api/whatsapp-send', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (active) {
+          setIsConnected(response.ok && data.configured === true);
+          setConfigMessage(data.message || '');
+          setConfigLoading(false);
+        }
+      } catch {
+        if (active) {
+          setIsConnected(false);
+          setConfigMessage('Endpoint de mensagens indisponível.');
+          setConfigLoading(false);
+        }
+      }
+    };
+
+    void checkServerConfig();
+    const { data: authListener } = supabase?.auth.onAuthStateChange(() => { void checkServerConfig(); }) || { data: null };
+    return () => {
+      active = false;
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
 
   /* ── Birthday / Follow-up ── */
   const birthdayToday = useMemo(() => {
@@ -118,15 +159,6 @@ export default function WhatsAppHub({ bookings }) {
       .filter(c => c.lastVisit && new Date(c.lastVisit) < cutoff)
       .sort((a, b) => new Date(a.lastVisit) - new Date(b.lastVisit));
   }, [clients]);
-
-  /* ── Credential handlers ── */
-  const saveCreds = () => {
-    const c = { token: formToken, phoneId: formPhoneId, phone: formPhone };
-    setCreds(c);
-    localStorage.setItem(API_CREDS_KEY, JSON.stringify(c));
-    setCredsSaved(true);
-    setTimeout(() => setCredsSaved(false), 2500);
-  };
 
   /* ── Bulk send handlers ── */
   const filteredClients = useMemo(() =>
@@ -160,41 +192,35 @@ export default function WhatsAppHub({ bookings }) {
   };
 
   const sendBulk = async () => {
-    if (!isConnected || !selected.size || !bulkMessage.trim() || sending) return;
+    if (!isConnected || !selected.size || !bulkMessage.trim() || sending || !supabase) return;
     setSending(true);
     setSendLog(null);
-    const toSend = clients.filter(c => selected.has(c.phone.replace(/\D/g, '')));
-    const log = [];
-    for (const client of toSend) {
-      const digits = client.phone.replace(/\D/g, '');
-      const text   = bulkMessage.replace(/\{nome\}/g, client.name);
-      try {
-        const res  = await fetch(`https://graph.facebook.com/v18.0/${creds.phoneId}/messages`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${creds.token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            to:   `55${digits}`,
-            type: 'text',
-            text: { body: text },
-          }),
-        });
-        const data = await res.json();
-        log.push({
-          name:  client.name,
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada. Faça login novamente.');
+      const recipients = clients
+        .filter(c => selected.has(c.phone.replace(/\D/g, '')))
+        .map(client => ({
+          name: client.name,
           phone: client.phone,
-          ok:    res.ok,
-          error: res.ok ? null : (data.error?.message || 'Erro desconhecido'),
-        });
-      } catch (err) {
-        log.push({ name: client.name, phone: client.phone, ok: false, error: err.message });
-      }
+          message: bulkMessage.replace(/\{nome\}/g, client.name),
+        }));
+      const response = await fetch('/api/whatsapp-send', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ recipients }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Falha no envio server-side.');
+      setSendLog(data.results || []);
+    } catch (err) {
+      setSendLog([{ name: 'Sistema', phone: '', ok: false, error: err.message }]);
+    } finally {
+      setSending(false);
     }
-    setSendLog(log);
-    setSending(false);
   };
 
   /* ── Template handlers ── */
@@ -254,50 +280,18 @@ export default function WhatsAppHub({ bookings }) {
           para enviar mensagens programaticamente para vários clientes simultaneamente.
         </div>
 
-        <div className="bg-white border border-brand-100 p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label className="text-[10px] font-semibold text-brand-400 uppercase tracking-widest block mb-1.5">
-              Token de Acesso Permanente
-            </label>
-            <input
-              type="password"
-              value={formToken}
-              onChange={e => setFormToken(e.target.value)}
-              placeholder="EAAxxxxxx..."
-              className="input-field text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-brand-400 uppercase tracking-widest block mb-1.5">
-              Phone Number ID
-            </label>
-            <input
-              type="text"
-              value={formPhoneId}
-              onChange={e => setFormPhoneId(e.target.value)}
-              placeholder="1234567890"
-              className="input-field text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-brand-400 uppercase tracking-widest block mb-1.5">
-              Número WhatsApp
-            </label>
-            <input
-              type="text"
-              value={formPhone}
-              onChange={e => setFormPhone(e.target.value)}
-              placeholder="+55 94 9 9999-9999"
-              className="input-field text-sm"
-            />
+        <div className="bg-white border border-brand-100 p-5">
+          <div className="flex items-start gap-3">
+            {configLoading ? <RefreshCw size={16} className="text-brand-400 animate-spin mt-0.5" /> : <Wifi size={16} className="text-green-600 mt-0.5" />}
+            <div>
+              <p className="text-sm font-semibold text-brand-900">Credenciais protegidas no servidor</p>
+              <p className="text-xs text-brand-400 mt-1 leading-relaxed">
+                O token não é coletado nem armazenado no navegador. Configure `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` e `SUPABASE_SERVICE_ROLE_KEY` nas variáveis privadas do Vercel.
+              </p>
+              {configMessage && <p className="text-xs text-amber-700 mt-2">{configMessage}</p>}
+            </div>
           </div>
         </div>
-        <button
-          onClick={saveCreds}
-          className={`mt-3 btn-primary text-sm transition-colors ${credsSaved ? '!bg-green-600' : ''}`}
-        >
-          {credsSaved ? '✓ Salvo com sucesso!' : 'Salvar e Conectar'}
-        </button>
       </section>
 
       {/* ── Disparo em Massa ── */}
@@ -309,7 +303,7 @@ export default function WhatsAppHub({ bookings }) {
         {!isConnected && (
           <div className="bg-amber-50 border border-amber-200 px-4 py-3 mb-4 text-xs text-amber-700 flex items-center gap-2">
             <span>⚠️</span>
-            <span>Configure sua conexão WhatsApp Business API acima para usar o disparo em massa.</span>
+            <span>O envio está indisponível até as variáveis privadas do endpoint server-side serem configuradas no Vercel.</span>
           </div>
         )}
 
