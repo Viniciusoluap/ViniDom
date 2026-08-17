@@ -38,6 +38,10 @@ CREATE INDEX IF NOT EXISTS idx_bookings_created_at     ON bookings(created_at DE
 -- ─────────────────────────────────────────────────────────────
 -- 3. ROW LEVEL SECURITY
 -- ─────────────────────────────────────────────────────────────
+-- A tabela fica protegida por padrão. Não conceda CRUD ao papel anon.
+-- Depois de criar a tabela, execute a migration:
+-- supabase/migrations/20260817_security_hardening.sql
+-- Ela cria os RPCs públicos mínimos e as políticas autenticadas.
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "anon_select" ON bookings;
@@ -45,17 +49,8 @@ DROP POLICY IF EXISTS "anon_insert" ON bookings;
 DROP POLICY IF EXISTS "anon_update" ON bookings;
 DROP POLICY IF EXISTS "anon_delete" ON bookings;
 
-CREATE POLICY "anon_select" ON bookings FOR SELECT TO anon USING (true);
-CREATE POLICY "anon_insert" ON bookings FOR INSERT TO anon WITH CHECK (true);
-CREATE POLICY "anon_update" ON bookings FOR UPDATE TO anon USING (true);
-CREATE POLICY "anon_delete" ON bookings FOR DELETE TO anon USING (true);
-
--- ─────────────────────────────────────────────────────────────
--- 4. SUPABASE REALTIME
--- Habilita sincronização em tempo real da tabela bookings.
--- Após executar, verifique em: Supabase → Database → Replication
--- ─────────────────────────────────────────────────────────────
-ALTER PUBLICATION supabase_realtime ADD TABLE bookings;
+-- O realtime é configurado somente após aplicar a migration de hardening,
+-- com os canais e filtros autenticados definidos conforme o ambiente.
 
 -- ─────────────────────────────────────────────────────────────
 -- 5. STATUS VÁLIDOS (constraint opcional para integridade)

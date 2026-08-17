@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { UserCircle, CheckCircle, XCircle, Clock, Calendar, ChevronLeft, ChevronRight, Eye, EyeOff, BarChart3 } from 'lucide-react';
 import { DAY_NAMES_PT, MONTH_NAMES_PT } from '../utils/constants';
 import { useBookings } from '../hooks/useBookings';
-import { loadStaff } from '../utils/staffService';
+import { supabase } from '../lib/supabase';
 import { dateToKey, formatTime, formatPrice } from '../utils/dateFormatter';
 
 const STATUS_LABELS = {
@@ -17,51 +17,75 @@ const TABS = [
 ];
 
 export default function Funcionario() {
-  const [authed, setAuthed] = useState(() => !!sessionStorage.getItem('staff_auth'));
+  const [authed, setAuthed] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
   const [email, setEmail]   = useState('');
   const [pw, setPw]         = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError]       = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [staffMember, setStaffMember] = useState(() => {
-    try {
-      const s = sessionStorage.getItem('staff_member');
-      return s ? JSON.parse(s) : null;
-    } catch { return null; }
-  });
+  const [staffMember, setStaffMember] = useState(null);
   const [activeTab, setActiveTab]     = useState('dashboard');
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   const { bookings, loading, updateBookingStatus } = useBookings();
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    const staffList = loadStaff();
-    const found = staffList.find(
-      s => s.email && s.email.toLowerCase() === email.trim().toLowerCase() && s.password === pw
-    );
-    if (found) {
-      if (found.active === false) {
-        setError(true);
-        setErrorMsg('Acesso desativado. Entre em contato com o administrador.');
-        setPw('');
-        return;
+  useEffect(() => {
+    sessionStorage.removeItem('staff_auth');
+    sessionStorage.removeItem('staff_member');
+    if (!supabase) {
+      queueMicrotask(() => setAuthReady(true));
+      return undefined;
+    }
+
+    let active = true;
+    const applySession = (session) => {
+      const metadata = session?.user?.app_metadata || {};
+      const allowed = metadata.role === 'staff' && metadata.active !== false && metadata.professional_name;
+      const member = allowed ? {
+        name: metadata.professional_name,
+        role: metadata.professional_role || 'Equipe',
+        color: metadata.professional_color || '#1a1a2e',
+        initials: metadata.professional_initials || metadata.professional_name.slice(0, 2).toUpperCase(),
+      } : null;
+      if (session && !allowed) void supabase.auth.signOut();
+      if (active) {
+        setStaffMember(member);
+        setAuthed(Boolean(member));
+        setAuthReady(true);
       }
-      const { password: _pwd, ...memberSafe } = found;
-      sessionStorage.setItem('staff_auth', '1');
-      sessionStorage.setItem('staff_member', JSON.stringify(memberSafe));
-      setStaffMember(memberSafe);
-      setAuthed(true);
-    } else {
+    };
+
+    supabase.auth.getSession().then(({ data }) => applySession(data.session));
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => applySession(session));
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError(false);
+    setErrorMsg('');
+    if (!supabase) {
+      setError(true);
+      setErrorMsg('Supabase Auth não configurado.');
+      return;
+    }
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: pw,
+    });
+    if (authError) {
       setError(true);
       setErrorMsg('E-mail ou senha incorretos.');
       setPw('');
     }
   };
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('staff_auth');
-    sessionStorage.removeItem('staff_member');
+  const handleLogout = async () => {
+    await supabase?.auth.signOut();
     setAuthed(false);
     setStaffMember(null);
     setEmail('');
@@ -127,6 +151,12 @@ export default function Funcionario() {
       })
       .reduce((s, b) => s + (b.totalPrice || 0), 0),
     [myBookings]
+  );
+
+  if (!authReady) return (
+    <div className="flex-1 flex items-center justify-center pt-24">
+      <div className="w-6 h-6 border-2 border-brand-900 border-t-transparent rounded-full animate-spin" />
+    </div>
   );
 
   // ── Tela de login ──
