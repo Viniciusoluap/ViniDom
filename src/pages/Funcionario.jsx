@@ -28,7 +28,13 @@ export default function Funcionario() {
   const [activeTab, setActiveTab]     = useState('dashboard');
   const [selectedDate, setSelectedDate] = useState(new Date());
 
-  const { bookings, loading, updateBookingStatus } = useBookings();
+  const {
+    bookings,
+    loading,
+    error: bookingsError,
+    reload: reloadBookings,
+    updateBookingStatus,
+  } = useBookings(authed);
 
   useEffect(() => {
     sessionStorage.removeItem('staff_auth');
@@ -219,6 +225,19 @@ export default function Funcionario() {
       </div>
     );
   }
+
+  if (bookingsError) return (
+    <div className="flex-1 pt-24 pb-16 px-6 max-w-3xl mx-auto w-full animate-fade-in">
+      <div className="bg-red-50 border border-red-200 px-5 py-6 text-center">
+        <p className="text-sm font-semibold text-red-800">Não foi possível carregar sua agenda.</p>
+        <p className="text-xs text-red-600 mt-1">Os dados não foram substituídos por uma lista vazia.</p>
+        <p className="text-[11px] text-red-500 mt-2 break-words">{bookingsError}</p>
+        <button onClick={reloadBookings} className="btn-secondary mt-4 py-1.5 px-4 text-xs">
+          Tentar novamente
+        </button>
+      </div>
+    </div>
+  );
 
   const dayName   = DAY_NAMES_PT[selectedDate.getDay()];
   const dayNum    = selectedDate.getDate();
