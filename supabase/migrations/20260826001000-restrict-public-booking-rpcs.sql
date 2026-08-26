@@ -11,4 +11,7 @@ revoke execute on function public.get_booked_slots_v2(text) from anon, authentic
 revoke execute on function public.get_public_booking_v2(uuid) from anon, authenticated;
 revoke execute on function public.create_public_booking_v2(
   uuid, jsonb, text, text, integer, integer, integer, integer, text, text, text, text, date, text
-) from anon, authenticated;
+) from public, anon, authenticated;
+grant execute on function public.create_public_booking_v2(
+  uuid, jsonb, text, text, integer, integer, integer, integer, text, text, text, text, date, text
+) to service_role;
