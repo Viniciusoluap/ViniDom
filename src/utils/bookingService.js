@@ -1,7 +1,11 @@
 import { supabase } from '../lib/supabase';
 import { dateToKey } from './dateFormatter';
+import { syncBookingWithCalendar } from './calendarService';
 
 const STORAGE_KEY = 'domconcept_bookings_v2';
+const CREATE_BOOKING_RPC = 'create_public_booking_v2';
+const GET_BOOKED_SLOTS_RPC = 'get_booked_slots_v2';
+const GET_PUBLIC_BOOKING_RPC = 'get_public_booking_v2';
 
 // Cache de slots por data — evita re-queries ao trocar datas no calendário
 const slotsCache = new Map();
@@ -46,7 +50,29 @@ export async function getClientByPhone(phone) {
   return null;
 }
 
+async function createRemoteBooking(data) {
+  const response = await fetch('/api/bookings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(payload?.error || 'Não foi possível confirmar o agendamento.');
+    error.status = response.status;
+    throw error;
+  }
+  return payload.booking;
+}
+
 export async function addBooking(data) {
+  if (import.meta.env.PROD) {
+    const booking = await createRemoteBooking(data);
+    slotsCache.delete(booking.dateKey);
+    saveLocal([...loadLocal(), booking]);
+    return booking;
+  }
+
   const id = crypto.randomUUID();
   const booking = {
     id,
@@ -55,6 +81,7 @@ export async function addBooking(data) {
     dateKey:       data.dateKey,
     timeSlot:      data.timeSlot,
     totalDuration: data.totalDuration,
+    operationalDuration: data.operationalDuration || data.totalDuration,
     totalPrice:    data.totalPrice,
     professional:  data.professional || null,
     client: {
@@ -65,14 +92,15 @@ export async function addBooking(data) {
     createdAt: new Date().toISOString(),
   };
 
-    if (supabase) {
-    const { data, error } = await supabase.rpc('create_public_booking', {
+    if (supabase && import.meta.env.VITE_USE_DIRECT_BOOKING_RPC === 'true') {
+    const { data, error } = await supabase.rpc(CREATE_BOOKING_RPC, {
       p_id: id,
       p_services: booking.services,
       p_date: booking.date,
       p_date_key: booking.dateKey,
       p_time_slot: booking.timeSlot,
       p_total_duration: booking.totalDuration,
+      p_operational_duration: booking.operationalDuration,
       p_total_price: booking.totalPrice,
       p_client_name: booking.client.name,
       p_client_phone: booking.client.phone,
@@ -82,7 +110,7 @@ export async function addBooking(data) {
       p_professional_name: booking.professional || null,
     });
     if (error) {
-      console.error('[Supabase] create_public_booking:', error.message);
+      console.error(`[Supabase] ${CREATE_BOOKING_RPC}:`, error.message);
       throw error;
     }
     if (data) booking.id = data;
@@ -97,10 +125,17 @@ export async function addBooking(data) {
 }
 
 export async function getBookingById(id) {
-  if (supabase) {
-    const { data, error } = await supabase.rpc('get_public_booking', { p_id: id });
+  if (supabase && import.meta.env.PROD) {
+    const response = await fetch(`/api/booking?id=${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok && payload.booking) return payload.booking;
+    if (response.status === 404) return null;
+    throw new Error(payload?.error || 'Não foi possível carregar a reserva.');
+  }
+  if (supabase && import.meta.env.VITE_USE_DIRECT_BOOKING_RPC === 'true') {
+    const { data, error } = await supabase.rpc(GET_PUBLIC_BOOKING_RPC, { p_id: id });
     if (!error && data?.length) return mapPublicRow(data[0]);
-    if (error) console.error('[Supabase] get_public_booking:', error.message);
+    if (error) console.error(`[Supabase] ${GET_PUBLIC_BOOKING_RPC}:`, error.message);
   }
   return loadLocal().find(b => b.id === id) || null;
 }
@@ -112,17 +147,28 @@ export async function getSlotsForDate(date) {
   if (slotsCache.has(key)) return slotsCache.get(key);
 
   let result;
-  if (supabase) {
-    const { data, error } = await supabase.rpc('get_booked_slots', { p_date_key: key });
+  if (supabase && import.meta.env.PROD) {
+    const response = await fetch(`/api/booking-availability?date=${encodeURIComponent(key)}`, { headers: { Accept: 'application/json' } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || 'Não foi possível consultar os horários.');
+    result = payload.slots || [];
+  } else if (supabase && import.meta.env.VITE_USE_DIRECT_BOOKING_RPC === 'true') {
+    const { data, error } = await supabase.rpc(GET_BOOKED_SLOTS_RPC, { p_date_key: key });
     if (error) {
-      console.error('[Supabase] get_booked_slots:', error.message);
+      console.error(`[Supabase] ${GET_BOOKED_SLOTS_RPC}:`, error.message);
       throw error;
     }
-    result = (data || []).map(r => ({ timeSlot: r.time_slot, totalDuration: r.total_duration }));
+    result = (data || []).map(r => ({
+      timeSlot: r.time_slot,
+      totalDuration: r.operational_duration || (r.total_duration === 90 ? 120 : r.total_duration),
+    }));
   } else {
     result = loadLocal()
       .filter(b => b.dateKey === key && b.status !== 'cancelled')
-      .map(b => ({ timeSlot: b.timeSlot, totalDuration: b.totalDuration }));
+      .map(b => ({
+        timeSlot: b.timeSlot,
+        totalDuration: b.operationalDuration || (b.totalDuration === 90 ? 120 : b.totalDuration),
+      }));
   }
 
   slotsCache.set(key, result);
@@ -137,7 +183,7 @@ export async function getAllBookings() {
       .order('created_at', { ascending: false });
     if (error) {
       console.error('[Supabase] getAllBookings:', error.message);
-      throw error;
+      return [];
     }
     return (data || []).map(mapRow);
   }
@@ -154,11 +200,14 @@ export async function updateBookingStatus(id, status) {
   }
 
   if (supabase) {
-    const { error } = await supabase.from('bookings').update({ status }).eq('id', id);
+    const { error } = await supabase.from('bookings').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
     if (error) {
       console.error('[Supabase] updateBookingStatus:', error.message);
       throw error;
     }
+  }
+  if (import.meta.env.PROD && supabase) {
+    await syncBookingWithCalendar(id, status === 'cancelled' ? 'cancel' : 'upsert');
   }
   saveLocal(local.map(b => b.id === id ? { ...b, status } : b));
 }
@@ -172,22 +221,26 @@ export async function updateBooking(id, patch) {
   const target = local.find(b => b.id === id);
 
   // Invalida cache do dia se a duração mudar — libera/bloqueia slots corretamente
-  if (patch.totalDuration !== undefined && target?.dateKey) {
+  if ((patch.totalDuration !== undefined || patch.operationalDuration !== undefined) && target?.dateKey) {
     slotsCache.delete(target.dateKey);
   }
 
   const dbPatch = {};
   if (patch.services      !== undefined) dbPatch.services       = patch.services;
   if (patch.totalDuration !== undefined) dbPatch.total_duration = patch.totalDuration;
+  if (patch.operationalDuration !== undefined) dbPatch.operational_duration = patch.operationalDuration;
   if (patch.totalPrice    !== undefined) dbPatch.total_price    = patch.totalPrice;
   if (patch.timeSlot      !== undefined) dbPatch.time_slot      = patch.timeSlot;
 
   if (supabase) {
-    const { error } = await supabase.from('bookings').update(dbPatch).eq('id', id);
+    const { error } = await supabase.from('bookings').update({ ...dbPatch, updated_at: new Date().toISOString() }).eq('id', id);
     if (error) {
       console.error('[Supabase] updateBooking:', error.message);
       throw error;
     }
+  }
+  if (import.meta.env.PROD && supabase) {
+    await syncBookingWithCalendar(id, 'upsert');
   }
   saveLocal(local.map(b => b.id === id ? { ...b, ...patch } : b));
 }
@@ -235,6 +288,7 @@ function mapPublicRow(r) {
     dateKey: r.date_key,
     timeSlot: r.time_slot,
     totalDuration: r.total_duration,
+    operationalDuration: r.operational_duration || r.total_duration,
     totalPrice: r.total_price,
     client: { name: r.client_name || '', email: '' },
     professional: r.professional_name || null,
@@ -251,7 +305,8 @@ function mapRow(r) {
     dateKey:       r.date_key,
     timeSlot:      r.time_slot,
     totalDuration: r.total_duration,
-    totalPrice:    r.total_price,
+    operationalDuration: r.operational_duration || (r.total_duration === 90 ? 120 : r.total_duration),
+    totalPrice: r.total_price,
     client: {
       name:      r.client_name,
       phone:     r.client_phone,

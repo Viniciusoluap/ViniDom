@@ -13,6 +13,8 @@ import { buildWhatsAppLink } from '../utils/whatsappFormatter';
 import { addBooking, getSlotsForDate } from '../utils/bookingService';
 import { sendBookingConfirmation } from '../utils/emailService';
 import { loadStaff } from '../utils/staffService';
+import { getDurationTotals, normalizeServicesForBooking } from '../utils/bookingDuration';
+import { getCalendarBookedSlots } from '../utils/calendarService';
 
 const STEPS = ['Serviço', 'Data & Hora', 'Profissional', 'Seus Dados', 'Confirmar'];
 const EMPTY_CLIENT = { name: '', phone: '', email: '', notes: '', birthdate: '' };
@@ -33,8 +35,8 @@ export default function Booking() {
   const [activeCategory, setActiveCategory]     = useState('Todos');
   const [bookedSlots, setBookedSlots]           = useState([]);
 
-  const totalDuration = selectedServices.reduce((s, svc) => s + svc.duration, 0);
-  const totalPrice    = selectedServices.reduce((s, svc) => s + svc.price, 0);
+  const { commercialDuration: totalDuration, operationalDuration } = getDurationTotals(selectedServices);
+  const totalPrice = selectedServices.reduce((s, svc) => s + svc.price, 0);
 
   useEffect(() => {
     const sid = searchParams.get('servico');
@@ -45,11 +47,28 @@ export default function Booking() {
   }, [services]);
 
   useEffect(() => {
-    if (!selectedDate) { setBookedSlots([]); return; }
-    getSlotsForDate(selectedDate).then(setBookedSlots);
+    if (!selectedDate) { setBookedSlots([]); return undefined; }
+    let active = true;
+    const calendarSlots = import.meta.env.PROD
+      ? getCalendarBookedSlots(selectedDate)
+      : Promise.resolve([]);
+    Promise.all([getSlotsForDate(selectedDate), calendarSlots])
+      .then(([databaseSlots, externalSlots]) => {
+        if (active) setBookedSlots([...databaseSlots, ...externalSlots]);
+      })
+      .catch((error) => {
+        console.error('Erro ao consultar disponibilidade:', error);
+        if (active) setBookedSlots([]);
+      });
+    return () => { active = false; };
   }, [selectedDate]);
 
-  const slots = useAvailableSlots({ date: selectedDate, totalDuration, bookedSlots });
+  const slots = useAvailableSlots({
+    date: selectedDate,
+    totalDuration,
+    services: selectedServices,
+    bookedSlots,
+  });
 
   const toggleService = (service) => {
     setSelectedServices(prev =>
@@ -77,11 +96,12 @@ export default function Booking() {
     setLoading(true);
     try {
       const booking = await addBooking({
-        services: selectedServices,
+        services: normalizeServicesForBooking(selectedServices),
         date:     selectedDate.toISOString(),
         dateKey:  dateToKey(selectedDate),
         timeSlot: selectedSlot,
         totalDuration,
+        operationalDuration,
         totalPrice,
         professional: selectedStaff?.name || null,
         client,

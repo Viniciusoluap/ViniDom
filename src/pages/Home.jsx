@@ -13,8 +13,6 @@ const HIGHLIGHTS = [
 ];
 
 export default function Home() {
-  const featured = SERVICES.filter((s) => s.popular);
-
   return (
     <div className="flex-1 animate-fade-in">
 
