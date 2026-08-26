@@ -6,8 +6,6 @@ import { MONTH_NAMES_PT } from '../utils/constants';
 // Limites e alíquotas vigentes (MEI 2025)
 const MEI_LIMITE_ANUAL   = 81000;   // R$ 81.000/ano
 const DAS_MENSAL_SERVICO = 80.90;   // INSS R$71,60 + ISS R$5,00 + ICMS R$4,30 — barbearia/salão
-const INSS_ALIQUOTA      = 0.11;    // Simples Nacional (caso ultrapasse MEI)
-
 const EXPENSE_KEY = 'vcvisagismo_expenses';
 
 function loadExpenses() {
@@ -74,10 +72,6 @@ export default function Contabilidade({ bookings }) {
   const netProfit = annualRevenue - totalExpenses - estimatedDAS;
 
   // Despesas por mês atual
-  const monthExpenses = expenses.filter(e => e.year === currentYear && e.month === currentMonth);
-  const monthExpTotal = monthExpenses.reduce((s, e) => s + e.value, 0);
-  const monthRevenue  = monthlyRevenue[currentMonth]?.revenue || 0;
-  const monthNet      = monthRevenue - monthExpTotal - DAS_MENSAL_SERVICO;
 
   // Adicionar despesa
   const addExpense = () => {

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Printer } from 'lucide-react';
-import { formatPrice, formatDateLong } from '../utils/dateFormatter';
+import { formatPrice } from '../utils/dateFormatter';
 import { MONTH_NAMES_PT } from '../utils/constants';
 
 export default function Reports({ bookings }) {

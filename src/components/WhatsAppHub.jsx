@@ -286,7 +286,7 @@ export default function WhatsAppHub({ bookings }) {
             <div>
               <p className="text-sm font-semibold text-brand-900">Credenciais protegidas no servidor</p>
               <p className="text-xs text-brand-400 mt-1 leading-relaxed">
-                O token não é coletado nem armazenado no navegador. Configure `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` e `SUPABASE_SERVICE_ROLE_KEY` nas variáveis privadas do Vercel.
+                O token não é coletado nem armazenado no navegador. Configure as credenciais privadas do WhatsApp e do servidor nas variáveis seguras do Vercel.
               </p>
               {configMessage && <p className="text-xs text-amber-700 mt-2">{configMessage}</p>}
             </div>

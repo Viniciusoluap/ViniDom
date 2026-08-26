@@ -1,5 +1,3 @@
-/* global process */
-
 import { createClient } from '@supabase/supabase-js';
 
 const MAX_RECIPIENTS = 50;

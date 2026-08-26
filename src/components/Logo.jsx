@@ -1,4 +1,4 @@
-export default function Logo({ size = 'md', inverted = false, horizontal = false, className = '', style = {} }) {
+export default function Logo({ size = 'md', inverted = false, className = '', style = {} }) {
   const widths = { sm: 110, md: 150, lg: 360, xl: 420 };
   const w = widths[size] ?? 150;
 

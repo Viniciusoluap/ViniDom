@@ -1,14 +1,10 @@
-import { useState, useMemo, useRef } from 'react';
-import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Pencil, X, Search, Trash2, ChevronDown, RefreshCw } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Pencil, X, Search, Trash2 } from 'lucide-react';
 import { DAY_NAMES_PT, MONTH_NAMES_PT, SERVICES } from '../utils/constants';
 import { formatTime, formatPrice } from '../utils/dateFormatter';
 import { dateToKey } from '../utils/dateFormatter';
-
-const GCAL_KEY = 'vcvisagismo_gcal_config';
-function loadGCalConfig() {
-  try { return JSON.parse(localStorage.getItem(GCAL_KEY) || '{}'); }
-  catch { return {}; }
-}
+import { getDurationTotals } from '../utils/bookingDuration';
+import { getCalendarStatus } from '../utils/calendarService';
 
 const HOUR_START  = 9;
 const HOUR_END    = 19;
@@ -53,84 +49,20 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit, o
 
   const dateInputRef = useRef(null);
 
-  /* ── Google Calendar ── */
-  const [gcalConfig, setGcalConfig]         = useState(loadGCalConfig);
-  const [gcalClientId, setGcalClientId]     = useState(() => loadGCalConfig().clientId    || '');
-  const [gcalCalId, setGcalCalId]           = useState(() => loadGCalConfig().calendarId  || '');
-  const [gcalToken, setGcalToken]           = useState(null);
-  const [gcalConnecting, setGcalConnecting] = useState(false);
-  const [gcalSyncing, setGcalSyncing]       = useState(false);
-  const [gcalSyncResult, setGcalSyncResult] = useState(null);
-  const [showGcalPanel, setShowGcalPanel]   = useState(false);
+  /* ── Google Calendar automático ── */
+  const [gcalStatus, setGcalStatus] = useState(null);
 
-  const gcalConfigured = !!(gcalConfig.clientId && gcalConfig.calendarId);
-  const gcalConnected  = !!gcalToken;
-
-  const saveGcalConfig = () => {
-    const c = { clientId: gcalClientId, calendarId: gcalCalId };
-    setGcalConfig(c);
-    localStorage.setItem(GCAL_KEY, JSON.stringify(c));
-  };
-
-  const connectGcal = () => {
-    if (!gcalConfig.clientId) return;
-    setGcalConnecting(true);
-    const load = () => new Promise(resolve => {
-      if (window.google?.accounts) { resolve(); return; }
-      const s = document.createElement('script');
-      s.src = 'https://accounts.google.com/gsi/client';
-      s.onload = resolve;
-      document.head.appendChild(s);
-    });
-    load().then(() => {
-      window.google.accounts.oauth2.initTokenClient({
-        client_id: gcalConfig.clientId,
-        scope: 'https://www.googleapis.com/auth/calendar.events',
-        callback: (res) => {
-          setGcalToken(res.access_token || null);
-          setGcalConnecting(false);
-        },
-        error_callback: () => setGcalConnecting(false),
-      }).requestAccessToken();
-    }).catch(() => setGcalConnecting(false));
-  };
-
-  const disconnectGcal = () => { setGcalToken(null); setGcalSyncResult(null); };
-
-  const syncToGcal = async () => {
-    if (!gcalToken || !gcalConfig.calendarId) return;
-    setGcalSyncing(true);
-    setGcalSyncResult(null);
-    const calId = encodeURIComponent(gcalConfig.calendarId);
-    const toSync = bookings.filter(b => b.status !== 'cancelled');
-    let sent = 0, failed = 0;
-    for (const b of toSync) {
-      try {
-        const services = b.services || (b.service ? [b.service] : []);
-        const names    = services.map(s => s.name).join(' + ');
-        const [yr, mo, dy] = b.dateKey.split('-').map(Number);
-        const [hh, mm]     = (b.timeSlot || '09:00').split(':').map(Number);
-        const start = new Date(yr, mo - 1, dy, hh, mm);
-        const end   = new Date(start.getTime() + 60 * 60 * 1000);
-        const res = await fetch(
-          `https://www.googleapis.com/calendar/v3/calendars/${calId}/events`,
-          {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${gcalToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              summary:     `${b.client?.name || 'Cliente'} — ${names}`,
-              description: `Tel: ${b.client?.phone || ''}\nServiços: ${names}`,
-              start: { dateTime: start.toISOString(), timeZone: 'America/Sao_Paulo' },
-              end:   { dateTime: end.toISOString(),   timeZone: 'America/Sao_Paulo' },
-            }),
-          }
-        );
-        res.ok ? sent++ : failed++;
-      } catch { failed++; }
-    }
-    setGcalSyncResult({ sent, failed, total: toSync.length });
-    setGcalSyncing(false);
-  };
+  useEffect(() => {
+    if (!import.meta.env.PROD) return undefined;
+    let active = true;
+    getCalendarStatus()
+      .then(status => { if (active) setGcalStatus(status); })
+      .catch(error => {
+        console.error('Erro ao consultar status do calendário:', error);
+        if (active) setGcalStatus({ configured: false, error: 'Status indisponível' });
+      });
+    return () => { active = false; };
+  }, []);
 
   const todayKey = dateToKey(new Date());
   const dayKey   = dateToKey(selectedDate);
@@ -218,9 +150,9 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit, o
 
   const saveEdit = () => {
     if (!editingBooking || !editServices.length || !onEdit) return;
-    const totalDuration = editServices.reduce((s, sv) => s + sv.duration, 0);
-    const totalPrice    = editServices.reduce((s, sv) => s + sv.price, 0);
-    onEdit(editingBooking.id, { services: editServices, totalDuration, totalPrice });
+    const { commercialDuration: totalDuration, operationalDuration } = getDurationTotals(editServices);
+    const totalPrice = editServices.reduce((s, sv) => s + sv.price, 0);
+    onEdit(editingBooking.id, { services: editServices, totalDuration, operationalDuration, totalPrice });
     closeEdit();
   };
 
@@ -294,121 +226,24 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit, o
   return (
     <div className="animate-fade-in space-y-4">
 
-      {/* ── Google Agenda ── */}
-      <div className="bg-white border border-brand-100">
-        <button
-          onClick={() => setShowGcalPanel(v => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 hover:bg-warm-50 transition-colors"
-        >
-          <div className="flex items-center gap-2.5">
-            <GoogleCalIcon />
-            <span className="text-sm font-semibold text-brand-900">Google Agenda</span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 ${
-              gcalConnected  ? 'bg-green-100 text-green-700' :
-              gcalConfigured ? 'bg-blue-100 text-blue-700'  :
-                               'bg-brand-100 text-brand-400'
-            }`}>
-              {gcalConnected ? '✓ Conectado' : gcalConfigured ? 'Configurado' : 'Não configurado'}
-            </span>
-          </div>
-          <ChevronDown size={14} className={`text-brand-400 transition-transform ${showGcalPanel ? 'rotate-180' : ''}`} />
-        </button>
-
-        {showGcalPanel && (
-          <div className="border-t border-brand-100 p-4 space-y-4">
-
-            {/* Info */}
-            <div className="bg-blue-50 border border-blue-200 px-4 py-3 text-xs text-blue-700 leading-relaxed">
-              <strong>Sincronização com Google Agenda</strong> — Os agendamentos do site são exportados para o seu Google Calendar.
-              Esta integração também servirá de base para o <strong>agente de IA</strong> que realizará agendamentos automaticamente
-              e sincronizará com o Google Agenda em tempo real.
-            </div>
-
-            {/* Campos de config */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[10px] font-semibold text-brand-400 uppercase tracking-widest block mb-1.5">
-                  Client ID (OAuth 2.0)
-                </label>
-                <input
-                  type="text"
-                  value={gcalClientId}
-                  onChange={e => setGcalClientId(e.target.value)}
-                  placeholder="xxxx.apps.googleusercontent.com"
-                  className="input-field text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-semibold text-brand-400 uppercase tracking-widest block mb-1.5">
-                  ID do Calendário
-                </label>
-                <input
-                  type="text"
-                  value={gcalCalId}
-                  onChange={e => setGcalCalId(e.target.value)}
-                  placeholder="primary  ou  seu@gmail.com"
-                  className="input-field text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={saveGcalConfig}
-                className="btn-secondary text-sm py-1.5 px-4"
-              >
-                Salvar configuração
-              </button>
-
-              {gcalConfigured && !gcalConnected && (
-                <button
-                  onClick={connectGcal}
-                  disabled={gcalConnecting}
-                  className="btn-primary text-sm py-1.5 px-4 flex items-center gap-2 disabled:opacity-50"
-                >
-                  <GoogleCalIcon small />
-                  {gcalConnecting ? 'Conectando...' : 'Conectar com Google'}
-                </button>
-              )}
-
-              {gcalConnected && (
-                <>
-                  <button
-                    onClick={syncToGcal}
-                    disabled={gcalSyncing}
-                    className="btn-primary text-sm py-1.5 px-4 flex items-center gap-2 disabled:opacity-50"
-                  >
-                    <RefreshCw size={13} className={gcalSyncing ? 'animate-spin' : ''} />
-                    {gcalSyncing ? 'Sincronizando...' : 'Sincronizar agendamentos'}
-                  </button>
-                  <button
-                    onClick={disconnectGcal}
-                    className="text-xs text-brand-400 hover:text-red-500 transition-colors px-2"
-                  >
-                    Desconectar
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Resultado da sincronização */}
-            {gcalSyncResult && (
-              <div className={`px-4 py-3 text-xs flex items-center gap-2 ${gcalSyncResult.failed > 0 ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-green-50 border border-green-200 text-green-700'}`}>
-                <span>{gcalSyncResult.failed > 0 ? '⚠️' : '✅'}</span>
-                <span>
-                  {gcalSyncResult.sent} de {gcalSyncResult.total} agendamentos exportados com sucesso
-                  {gcalSyncResult.failed > 0 && ` · ${gcalSyncResult.failed} falha(s)`}.
-                </span>
-              </div>
-            )}
-
-            {/* Nota agente de IA */}
-            <div className="bg-brand-50 border border-brand-100 px-4 py-3 text-xs text-brand-400 leading-relaxed">
-              🤖 <strong className="text-brand-700">Preparado para o agente de IA:</strong> Quando o agente for instalado, ele utilizará
-              este mesmo calendário como fonte de verdade — novos agendamentos feitos pelo agente aparecerão
-              automaticamente no site e no Google Agenda sem intervenção manual.
-            </div>
-          </div>
+      {/* ── Google Agenda automático ── */}
+      <div className="bg-white border border-brand-100 px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <GoogleCalIcon />
+          <span className="text-sm font-semibold text-brand-900">Google Agenda automático</span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 ${
+            gcalStatus?.configured ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+          }`}>
+            {gcalStatus?.configured ? '✓ Backend configurado' : 'Aguardando configuração'}
+          </span>
+        </div>
+        <p className="mt-2 text-xs text-brand-400 leading-relaxed">
+          As reservas do site usam duração operacional, sincronização idempotente e atualização automática do evento. A configuração do Google fica protegida no servidor; não há mais Client ID ou token no navegador.
+        </p>
+        {gcalStatus?.counts && (
+          <p className="mt-2 text-[11px] text-brand-500">
+            Sincronizados: {gcalStatus.counts.synced || 0} · Pendentes: {gcalStatus.counts.pending || 0} · Falhas: {gcalStatus.counts.failed || 0}
+          </p>
         )}
       </div>
 

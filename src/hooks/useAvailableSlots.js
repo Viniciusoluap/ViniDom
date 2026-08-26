@@ -1,9 +1,13 @@
 import { useMemo } from 'react';
 import { parseTimeToMinutes, getBusinessHoursForDate } from '../utils/dateFormatter';
 import { SLOT_INTERVAL } from '../utils/constants';
+import { getOperationalDuration } from '../utils/bookingDuration';
 
 // bookedSlots: [{ timeSlot, totalDuration }]
-export function useAvailableSlots({ date, totalDuration, bookedSlots = [] }) {
+export function useAvailableSlots({ date, totalDuration, services = [], bookedSlots = [] }) {
+  const operationalDuration = services.length
+    ? services.reduce((sum, service) => sum + getOperationalDuration(service), 0)
+    : totalDuration;
   return useMemo(() => {
     if (!date || !totalDuration) return [];
 
@@ -16,17 +20,17 @@ export function useAvailableSlots({ date, totalDuration, bookedSlots = [] }) {
     const lunchEnd   = hours.lunch ? parseTimeToMinutes(hours.lunch.end) : null;
 
     const slots = [];
-    for (let t = open; t + totalDuration <= close; t += SLOT_INTERVAL) {
-      if (lunchStart !== null && t < lunchEnd && t + totalDuration > lunchStart) continue;
+    for (let t = open; t + operationalDuration <= close; t += SLOT_INTERVAL) {
+      if (lunchStart !== null && t < lunchEnd && t + operationalDuration > lunchStart) continue;
 
       const isBooked = bookedSlots.some(b => {
         const bEnd = b.timeSlot + b.totalDuration;
-        return t < bEnd && t + totalDuration > b.timeSlot;
+        return t < bEnd && t + operationalDuration > b.timeSlot;
       });
 
       if (!isBooked) slots.push(t);
     }
 
     return slots;
-  }, [date, totalDuration, bookedSlots]);
+  }, [date, totalDuration, operationalDuration, bookedSlots]);
 }
