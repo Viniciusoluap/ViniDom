@@ -1,4 +1,4 @@
-import { DAY_NAMES_PT, MONTH_NAMES_PT, DAY_KEYS, BUSINESS_HOURS } from './constants';
+import { DAY_NAMES_PT, MONTH_NAMES_PT, DAY_KEYS, BUSINESS_HOURS } from './constants.js';
 
 export function formatDate(date) {
   if (!date) return '';
