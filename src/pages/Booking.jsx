@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import StepIndicator from '../components/StepIndicator';
 import ServiceCard from '../components/ServiceCard';
@@ -15,6 +15,7 @@ import { sendBookingConfirmation } from '../utils/emailService';
 import { loadStaff } from '../utils/staffService';
 import { getDurationTotals, normalizeServicesForBooking } from '../utils/bookingDuration';
 import { getCalendarBookedSlots } from '../utils/calendarService';
+import { loadAvailability } from '../utils/availability';
 
 const STEPS = ['Serviço', 'Data & Hora', 'Profissional', 'Seus Dados', 'Confirmar'];
 const EMPTY_CLIENT = { name: '', phone: '', email: '', notes: '', birthdate: '' };
@@ -23,9 +24,10 @@ export default function Booking() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { services, categories } = useServices();
+  const requestedService = services.find(service => service.id === Number(searchParams.get('servico')));
 
-  const [step, setStep]                         = useState(0);
-  const [selectedServices, setSelectedServices] = useState([]);
+  const [step, setStep]                         = useState(requestedService ? 1 : 0);
+  const [selectedServices, setSelectedServices] = useState(() => requestedService ? [requestedService] : []);
   const [selectedDate, setSelectedDate]         = useState(null);
   const [selectedSlot, setSelectedSlot]         = useState(null);
   const [staffList]                             = useState(() => loadStaff());
@@ -34,37 +36,35 @@ export default function Booking() {
   const [loading, setLoading]                   = useState(false);
   const [activeCategory, setActiveCategory]     = useState('Todos');
   const [bookedSlots, setBookedSlots]           = useState([]);
+  const [availabilityStatus, setAvailabilityStatus] = useState('idle');
+  const [availabilityAttempt, setAvailabilityAttempt] = useState(0);
+  const availabilityRequest = useRef(0);
 
   const { commercialDuration: totalDuration, operationalDuration } = getDurationTotals(selectedServices);
   const totalPrice = selectedServices.reduce((s, svc) => s + svc.price, 0);
 
   useEffect(() => {
-    const sid = searchParams.get('servico');
-    if (sid) {
-      const found = services.find(s => s.id === Number(sid));
-      if (found) { setSelectedServices([found]); setStep(1); }
-    }
-  }, [services]);
+    if (!selectedDate) return undefined;
+    const requestId = ++availabilityRequest.current;
+    const isCurrent = () => availabilityRequest.current === requestId;
+    const calendarLoader = import.meta.env.PROD ? getCalendarBookedSlots : async () => [];
 
-  useEffect(() => {
-    if (!selectedDate) { setBookedSlots([]); return undefined; }
-    let active = true;
-    const calendarSlots = import.meta.env.PROD
-      ? getCalendarBookedSlots(selectedDate)
-      : Promise.resolve([]);
-    Promise.all([getSlotsForDate(selectedDate), calendarSlots])
-      .then(([databaseSlots, externalSlots]) => {
-        if (active) setBookedSlots([...databaseSlots, ...externalSlots]);
-      })
-      .catch((error) => {
-        console.error('Erro ao consultar disponibilidade:', error);
-        if (active) setBookedSlots([]);
-      });
-    return () => { active = false; };
-  }, [selectedDate]);
+    loadAvailability({
+      date: selectedDate,
+      loadDatabaseSlots: getSlotsForDate,
+      loadCalendarSlots: calendarLoader,
+      isCurrent,
+    }).then((result) => {
+      if (result.status === 'stale') return;
+      if (result.status === 'success') setBookedSlots(result.slots);
+      setAvailabilityStatus(result.status);
+    });
+
+    return () => { availabilityRequest.current += 1; };
+  }, [selectedDate, availabilityAttempt]);
 
   const slots = useAvailableSlots({
-    date: selectedDate,
+    date: availabilityStatus === 'success' ? selectedDate : null,
     totalDuration,
     services: selectedServices,
     bookedSlots,
@@ -76,11 +76,27 @@ export default function Booking() {
         ? prev.filter(s => s.id !== service.id)
         : [...prev, service]
     );
+    availabilityRequest.current += 1;
     setSelectedDate(null);
     setSelectedSlot(null);
+    setBookedSlots([]);
+    setAvailabilityStatus('idle');
   };
 
-  const handleDateSelect = (date) => { setSelectedDate(date); setSelectedSlot(null); };
+  const handleDateSelect = (date) => {
+    availabilityRequest.current += 1;
+    setSelectedDate(date);
+    setSelectedSlot(null);
+    setBookedSlots([]);
+    setAvailabilityStatus('loading');
+  };
+
+  const retryAvailability = useCallback(() => {
+    setSelectedSlot(null);
+    setBookedSlots([]);
+    setAvailabilityStatus('loading');
+    setAvailabilityAttempt(attempt => attempt + 1);
+  }, []);
 
   const canNext = () => {
     if (step === 0) return selectedServices.length > 0;
@@ -202,10 +218,26 @@ export default function Booking() {
               <h2 className="font-semibold text-brand-900 text-sm mb-4 tracking-widest uppercase">
                 {selectedDate ? 'Horários Disponíveis' : 'Selecione uma data'}
               </h2>
-              {selectedDate
-                ? <TimeSlotPicker slots={slots} selected={selectedSlot} onSelect={setSelectedSlot} />
-                : <div className="border border-brand-100 p-10 text-center text-brand-300 text-sm bg-white">Escolha uma data no calendário</div>
-              }
+              {!selectedDate && (
+                <div className="border border-brand-100 p-10 text-center text-brand-300 text-sm bg-white">Escolha uma data no calendário</div>
+              )}
+              {selectedDate && availabilityStatus === 'loading' && (
+                <div className="border border-brand-100 p-10 text-center text-brand-400 text-sm bg-white" role="status" aria-live="polite">
+                  Consultando horários disponíveis…
+                </div>
+              )}
+              {selectedDate && availabilityStatus === 'error' && (
+                <div className="border border-red-200 p-8 text-center bg-red-50" role="alert">
+                  <p className="text-red-800 text-sm font-semibold">Não foi possível consultar os horários.</p>
+                  <p className="text-red-600 text-xs mt-1 mb-4">Tente novamente para conferir a disponibilidade desta data.</p>
+                  <button type="button" onClick={retryAvailability} className="btn-secondary py-2.5">
+                    Tentar novamente
+                  </button>
+                </div>
+              )}
+              {selectedDate && availabilityStatus === 'success' && (
+                <TimeSlotPicker slots={slots} selected={selectedSlot} onSelect={setSelectedSlot} />
+              )}
             </div>
           </div>
           <div className="flex justify-between">

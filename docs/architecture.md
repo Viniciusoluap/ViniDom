@@ -1,6 +1,6 @@
 # Vini Dom — Arquitetura da Automação de Agendamentos
 
-**Status:** Aprovada para implementação técnica.
+**Status:** Implementada no repositório; integrações externas dependem da configuração segura do ambiente.
 
 ## 1. Decisão arquitetural
 
@@ -60,10 +60,9 @@ A primeira entrega deve ser feita em branch de feature com migration versionada,
 
 ## 9. Critérios de validação
 
-- Lint e build passam.
-- Testes de duração e slot cobrem 30, 90→120, múltiplos serviços, almoço, fechamento e limite de fim de expediente.
-- Testes de adaptação de data/hora cobrem fuso brasileiro e horários numéricos.
-- Testes de idempotência garantem que a mesma reserva não gere dois eventos.
-- Testes de cancelamento e atualização usam o mesmo ID de evento.
-- Nenhuma variável privada aparece no bundle final.
-- Advisor de segurança do Supabase é consultado após migration.
+- A suíte local cobre durações 30 e 90→120, múltiplos serviços, dias fechados, almoço, conflitos e limite de fim de expediente.
+- A coordenação da disponibilidade é testada com sucesso, listas vazias, falha de cada fonte, nova tentativa e invalidação de resposta antiga, sem acessar serviços externos reais.
+- A adaptação de data/hora é testada com fuso brasileiro e horários numéricos.
+- Lint, build, testes e a verificação de confiabilidade devem passar antes de cada entrega.
+- Idempotência de chamadas HTTP ao Google Calendar e manutenção do ID em cancelamentos/atualizações continuam como requisitos arquiteturais; a suíte local atual valida a chave no evento de domínio, mas não simula toda a API externa.
+- Verificações do ambiente publicado, como variáveis efetivas, permissões do calendário e Advisor do Supabase, não são declaradas como executadas pela suíte local.

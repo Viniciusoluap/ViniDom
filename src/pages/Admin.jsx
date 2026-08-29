@@ -69,7 +69,7 @@ export default function Admin() {
     };
   }, []);
 
-  // Ref para leitura dos agendamentos dentro do interval sem stale closure
+  // Ref para acessar os agendamentos no intervalo sem capturar um estado desatualizado
   const bookingsRef = useRef(bookings);
   useEffect(() => { bookingsRef.current = bookings; }, [bookings]);
 
