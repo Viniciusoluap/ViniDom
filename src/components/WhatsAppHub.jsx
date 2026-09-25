@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Check, X, RefreshCw, Send, Users, Wifi, WifiOff, Search } from 'lucide-react';
+import { Pencil, Check, X, RefreshCw, Send, Users, Wifi, WifiOff, Search, Smartphone, QrCode, Save, LogOut } from 'lucide-react';
 import { formatDateLong } from '../utils/dateFormatter';
 import { supabase } from '../lib/supabase';
 
@@ -76,10 +76,23 @@ export default function WhatsAppHub({ bookings }) {
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText]   = useState('');
 
-  /* ── Server-side API status ── */
-  const [isConnected, setIsConnected] = useState(false);
+  /* ── Configuração dos canais (API oficial + WhatsApp Web) ── */
   const [configLoading, setConfigLoading] = useState(true);
-  const [configMessage, setConfigMessage] = useState('');
+  const [official, setOfficial] = useState({ configured: false, phoneNumberId: '', accessTokenPreview: '', apiVersion: 'v18.0' });
+  const [web, setWeb] = useState({ configured: false, serviceUrl: '', serviceSecretPreview: '' });
+  const [webConn, setWebConn] = useState({ status: 'disconnected', phone: null });
+  const [webQr, setWebQr] = useState(null);
+
+  const [officialForm, setOfficialForm] = useState({ accessToken: '', phoneNumberId: '' });
+  const [officialSaving, setOfficialSaving] = useState(false);
+  const [officialMsg, setOfficialMsg] = useState('');
+
+  const [webForm, setWebForm] = useState({ serviceUrl: '', serviceSecret: '' });
+  const [webSaving, setWebSaving] = useState(false);
+  const [webMsg, setWebMsg] = useState('');
+
+  /* ── Canal usado no disparo em massa ── */
+  const [channel, setChannel] = useState('official');
 
   /* ── Bulk send ── */
   const [bulkSearch, setBulkSearch]         = useState('');
@@ -91,54 +104,113 @@ export default function WhatsAppHub({ bookings }) {
 
   const clients = useMemo(() => buildClientMap(bookings), [bookings]);
 
+  const authFetch = async (url, options = {}) => {
+    if (!supabase) throw new Error('Supabase Auth não está configurado.');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Faça login novamente.');
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    return { ok: response.ok, data };
+  };
+
+  const loadConfig = async () => {
+    setConfigLoading(true);
+    try {
+      const { ok, data } = await authFetch('/api/whatsapp-config');
+      if (ok) {
+        setOfficial(data.official);
+        setWeb(data.web);
+      }
+    } catch {
+      /* mantém estado anterior se a checagem falhar */
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
   useEffect(() => {
+    void loadConfig();
+    const { data: authListener } = supabase?.auth.onAuthStateChange(() => { void loadConfig(); }) || { data: null };
+    return () => authListener?.subscription?.unsubscribe();
+  }, []);
+
+  /* ── Polling do status/QR do WhatsApp Web enquanto configurado ── */
+  useEffect(() => {
+    if (!web.configured) { setWebConn({ status: 'disconnected', phone: null }); setWebQr(null); return undefined; }
     let active = true;
-    const checkServerConfig = async () => {
-      setConfigLoading(true);
-      setConfigMessage('');
-      if (!supabase) {
-        if (active) {
-          setIsConnected(false);
-          setConfigMessage('Supabase Auth não está configurado.');
-          setConfigLoading(false);
-        }
-        return;
-      }
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        if (active) {
-          setIsConnected(false);
-          setConfigMessage('Faça login novamente para verificar a configuração.');
-          setConfigLoading(false);
-        }
-        return;
-      }
+    const poll = async () => {
       try {
-        const response = await fetch('/api/whatsapp-send', {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        const data = await response.json().catch(() => ({}));
-        if (active) {
-          setIsConnected(response.ok && data.configured === true);
-          setConfigMessage(data.message || '');
-          setConfigLoading(false);
+        const { ok, data } = await authFetch('/api/whatsapp-web?action=status');
+        if (active && ok) setWebConn({ status: data.status, phone: data.phone });
+        if (active && ok && data.status === 'qr_pending') {
+          const qrResult = await authFetch('/api/whatsapp-web?action=qr');
+          if (active && qrResult.ok) setWebQr(qrResult.data.qr);
+        } else if (active) {
+          setWebQr(null);
         }
       } catch {
-        if (active) {
-          setIsConnected(false);
-          setConfigMessage('Endpoint de mensagens indisponível.');
-          setConfigLoading(false);
-        }
+        /* ignora falhas pontuais de polling */
       }
     };
+    void poll();
+    const id = setInterval(poll, 4000);
+    return () => { active = false; clearInterval(id); };
+  }, [web.configured]);
 
-    void checkServerConfig();
-    const { data: authListener } = supabase?.auth.onAuthStateChange(() => { void checkServerConfig(); }) || { data: null };
-    return () => {
-      active = false;
-      authListener?.subscription?.unsubscribe();
-    };
-  }, []);
+  const saveOfficial = async () => {
+    if (!officialForm.accessToken.trim() || !officialForm.phoneNumberId.trim()) return;
+    setOfficialSaving(true);
+    setOfficialMsg('');
+    try {
+      const { ok, data } = await authFetch('/api/whatsapp-config', {
+        method: 'POST',
+        body: JSON.stringify({ channel: 'official', ...officialForm }),
+      });
+      if (!ok) throw new Error(data.error || 'Falha ao salvar.');
+      setOfficialForm({ accessToken: '', phoneNumberId: '' });
+      setOfficialMsg('Credenciais salvas com sucesso.');
+      await loadConfig();
+    } catch (err) {
+      setOfficialMsg(err.message);
+    } finally {
+      setOfficialSaving(false);
+    }
+  };
+
+  const saveWeb = async () => {
+    if (!webForm.serviceUrl.trim() || !webForm.serviceSecret.trim()) return;
+    setWebSaving(true);
+    setWebMsg('');
+    try {
+      const { ok, data } = await authFetch('/api/whatsapp-config', {
+        method: 'POST',
+        body: JSON.stringify({ channel: 'web', ...webForm }),
+      });
+      if (!ok) throw new Error(data.error || 'Falha ao salvar.');
+      setWebForm({ serviceUrl: '', serviceSecret: '' });
+      setWebMsg('Serviço conectado. Aguardando QR Code...');
+      await loadConfig();
+    } catch (err) {
+      setWebMsg(err.message);
+    } finally {
+      setWebSaving(false);
+    }
+  };
+
+  const disconnectWeb = async () => {
+    try {
+      await authFetch('/api/whatsapp-web', { method: 'POST', body: JSON.stringify({ action: 'disconnect' }) });
+    } catch { /* ignora */ }
+  };
+
+  const isConnected = channel === 'official' ? official.configured : (web.configured && webConn.status === 'connected');
 
   /* ── Birthday / Follow-up ── */
   const birthdayToday = useMemo(() => {
@@ -192,12 +264,10 @@ export default function WhatsAppHub({ bookings }) {
   };
 
   const sendBulk = async () => {
-    if (!isConnected || !selected.size || !bulkMessage.trim() || sending || !supabase) return;
+    if (!isConnected || !selected.size || !bulkMessage.trim() || sending) return;
     setSending(true);
     setSendLog(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Sessão expirada. Faça login novamente.');
       const recipients = clients
         .filter(c => selected.has(c.phone.replace(/\D/g, '')))
         .map(client => ({
@@ -205,16 +275,14 @@ export default function WhatsAppHub({ bookings }) {
           phone: client.phone,
           message: bulkMessage.replace(/\{nome\}/g, client.name),
         }));
-      const response = await fetch('/api/whatsapp-send', {
+      const endpoint = channel === 'official'
+        ? { url: '/api/whatsapp-send', body: { recipients } }
+        : { url: '/api/whatsapp-web', body: { action: 'send', recipients } };
+      const { ok, data } = await authFetch(endpoint.url, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ recipients }),
+        body: JSON.stringify(endpoint.body),
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Falha no envio server-side.');
+      if (!ok) throw new Error(data.error || 'Falha no envio server-side.');
       setSendLog(data.results || []);
     } catch (err) {
       setSendLog([{ name: 'Sistema', phone: '', ok: false, error: err.message }]);
@@ -262,34 +330,147 @@ export default function WhatsAppHub({ bookings }) {
         <MiniStat label="Falhas" value={sentFail} accent={sentFail > 0} />
       </div>
 
-      {/* ── Conexão API ── */}
+      {/* ── Conexão: API Oficial ── */}
       <section>
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest">
-            Conexão WhatsApp Business API
+            API Oficial (Meta Cloud API)
           </h2>
-          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 ${isConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-            {isConnected ? <Wifi size={10} /> : <WifiOff size={10} />}
-            {isConnected ? 'Configurado' : 'Não configurado'}
+          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 ${official.configured ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+            {official.configured ? <Wifi size={10} /> : <WifiOff size={10} />}
+            {configLoading ? 'Verificando...' : official.configured ? 'Configurado' : 'Não configurado'}
           </span>
         </div>
 
         <div className="bg-blue-50 border border-blue-200 px-4 py-3 mb-4 text-xs text-blue-700 leading-relaxed">
-          <strong>WhatsApp Business API (Meta Cloud API)</strong> — Gratuito até 1.000 conversas/mês.
-          Requer conta Meta Business verificada e número aprovado. O disparo em massa usa a API oficial
-          para enviar mensagens programaticamente para vários clientes simultaneamente.
+          Gratuito até 1.000 conversas/mês. Requer conta Meta Business verificada e número aprovado.
+          Sem risco de bloqueio — é a via recomendada para disparos em massa.
         </div>
 
-        <div className="bg-white border border-brand-100 p-5">
-          <div className="flex items-start gap-3">
-            {configLoading ? <RefreshCw size={16} className="text-brand-400 animate-spin mt-0.5" /> : <Wifi size={16} className="text-green-600 mt-0.5" />}
+        <div className="bg-white border border-brand-100 p-5 space-y-3">
+          {official.configured && (
+            <p className="text-xs text-brand-500">
+              Phone Number ID atual: <strong>{official.phoneNumberId}</strong> · Token: <code className="bg-warm-50 px-1">{official.accessTokenPreview}</code>
+            </p>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <p className="text-sm font-semibold text-brand-900">Credenciais protegidas no servidor</p>
-              <p className="text-xs text-brand-400 mt-1 leading-relaxed">
-                O token não é coletado nem armazenado no navegador. Configure as credenciais privadas do WhatsApp e do servidor nas variáveis seguras do Vercel.
-              </p>
-              {configMessage && <p className="text-xs text-amber-700 mt-2">{configMessage}</p>}
+              <p className="text-[10px] font-semibold text-brand-400 uppercase tracking-widest mb-1.5">Phone Number ID</p>
+              <input
+                type="text"
+                value={officialForm.phoneNumberId}
+                onChange={e => setOfficialForm(f => ({ ...f, phoneNumberId: e.target.value }))}
+                placeholder="Ex: 123456789012345"
+                className="input-field text-sm"
+              />
             </div>
+            <div>
+              <p className="text-[10px] font-semibold text-brand-400 uppercase tracking-widest mb-1.5">Access Token</p>
+              <input
+                type="password"
+                value={officialForm.accessToken}
+                onChange={e => setOfficialForm(f => ({ ...f, accessToken: e.target.value }))}
+                placeholder="Token permanente da Meta"
+                className="input-field text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={saveOfficial}
+              disabled={officialSaving || !officialForm.accessToken.trim() || !officialForm.phoneNumberId.trim()}
+              className="btn-primary text-xs flex items-center gap-1.5 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Save size={13} /> {officialSaving ? 'Salvando...' : 'Salvar credenciais'}
+            </button>
+            {officialMsg && <p className="text-xs text-brand-500">{officialMsg}</p>}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Conexão: WhatsApp Web ── */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest">
+            WhatsApp Web (número pessoal)
+          </h2>
+          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 ${webConn.status === 'connected' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+            {webConn.status === 'connected' ? <Wifi size={10} /> : <WifiOff size={10} />}
+            {!web.configured ? 'Não configurado' : webConn.status === 'connected' ? 'Conectado' : webConn.status === 'qr_pending' ? 'Aguardando QR Code' : 'Desconectado'}
+          </span>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 px-4 py-3 mb-4 text-xs text-amber-700 leading-relaxed">
+          Método não oficial — usa a conexão do próprio WhatsApp do celular. Existe risco real de bloqueio
+          do número, especialmente em disparos em massa. Requer um serviço externo sempre ativo (Railway).
+        </div>
+
+        <div className="bg-white border border-brand-100 p-5 space-y-4">
+          {!web.configured && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <p className="text-[10px] font-semibold text-brand-400 uppercase tracking-widest mb-1.5">URL do serviço (Railway)</p>
+                <input
+                  type="text"
+                  value={webForm.serviceUrl}
+                  onChange={e => setWebForm(f => ({ ...f, serviceUrl: e.target.value }))}
+                  placeholder="https://seu-servico.up.railway.app"
+                  className="input-field text-sm"
+                />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-brand-400 uppercase tracking-widest mb-1.5">Segredo do serviço</p>
+                <input
+                  type="password"
+                  value={webForm.serviceSecret}
+                  onChange={e => setWebForm(f => ({ ...f, serviceSecret: e.target.value }))}
+                  placeholder="SERVICE_SECRET configurado no Railway"
+                  className="input-field text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          {web.configured && (
+            <p className="text-xs text-brand-500">
+              Serviço: <strong>{web.serviceUrl}</strong>
+              {webConn.phone && <> · Número conectado: <strong>+{webConn.phone}</strong></>}
+            </p>
+          )}
+
+          {web.configured && webConn.status === 'qr_pending' && (
+            <div className="flex flex-col items-center gap-2 py-4 border border-dashed border-brand-200">
+              {webQr ? (
+                <img src={webQr} alt="QR Code do WhatsApp Web" className="w-48 h-48" />
+              ) : (
+                <RefreshCw size={20} className="text-brand-400 animate-spin" />
+              )}
+              <p className="text-xs text-brand-500 flex items-center gap-1.5"><QrCode size={13} /> Escaneie em Aparelhos Conectados → Conectar um aparelho</p>
+            </div>
+          )}
+
+          {web.configured && webConn.status === 'connecting' && (
+            <p className="text-xs text-brand-400 flex items-center gap-2"><RefreshCw size={13} className="animate-spin" /> Conectando ao serviço...</p>
+          )}
+
+          <div className="flex items-center gap-3">
+            {!web.configured ? (
+              <button
+                onClick={saveWeb}
+                disabled={webSaving || !webForm.serviceUrl.trim() || !webForm.serviceSecret.trim()}
+                className="btn-primary text-xs flex items-center gap-1.5 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Smartphone size={13} /> {webSaving ? 'Conectando...' : 'Conectar serviço'}
+              </button>
+            ) : (
+              <button
+                onClick={disconnectWeb}
+                className="btn-secondary text-xs flex items-center gap-1.5 py-2"
+              >
+                <LogOut size={13} /> Desconectar número
+              </button>
+            )}
+            {webMsg && <p className="text-xs text-brand-500">{webMsg}</p>}
           </div>
         </div>
       </section>
@@ -300,10 +481,29 @@ export default function WhatsAppHub({ bookings }) {
           Disparo em Massa
         </h2>
 
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setChannel('official')}
+            className={`px-4 py-2 text-xs font-semibold tracking-widest uppercase border transition-all ${channel === 'official' ? 'bg-brand-900 text-white border-brand-900' : 'bg-white text-brand-500 border-brand-200 hover:border-brand-900'}`}
+          >
+            API Oficial
+          </button>
+          <button
+            onClick={() => setChannel('web')}
+            className={`px-4 py-2 text-xs font-semibold tracking-widest uppercase border transition-all ${channel === 'web' ? 'bg-brand-900 text-white border-brand-900' : 'bg-white text-brand-500 border-brand-200 hover:border-brand-900'}`}
+          >
+            WhatsApp Web
+          </button>
+        </div>
+
         {!isConnected && (
           <div className="bg-amber-50 border border-amber-200 px-4 py-3 mb-4 text-xs text-amber-700 flex items-center gap-2">
             <span>⚠️</span>
-            <span>O envio está indisponível até as variáveis privadas do endpoint server-side serem configuradas no Vercel.</span>
+            <span>
+              {channel === 'official'
+                ? 'Configure a API Oficial acima para liberar o disparo em massa por esse canal.'
+                : 'Conecte o WhatsApp Web acima (escaneando o QR Code) para liberar o disparo em massa por esse canal.'}
+            </span>
           </div>
         )}
 
