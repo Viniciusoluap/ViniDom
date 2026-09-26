@@ -1,40 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
+import { getAdminClient, requireAdmin, sendJson } from '../src/server/supabaseServer.js';
 
 const MAX_RECIPIENTS = 50;
 const MAX_MESSAGE_LENGTH = 4096;
 
-function getEnv(name, fallback = '') {
-  return process.env[name] || fallback;
-}
-
-function getBearerToken(req) {
-  const value = req.headers.authorization || '';
-  return value.startsWith('Bearer ') ? value.slice(7).trim() : '';
-}
-
-function getAdminClient() {
-  const url = getEnv('SUPABASE_URL', getEnv('VITE_SUPABASE_URL'));
-  const serviceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
-  if (!url || !serviceRoleKey) return null;
-  return createClient(url, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
-async function requireAdmin(req) {
-  const supabase = getAdminClient();
-  const token = getBearerToken(req);
-  if (!supabase || !token) return { error: 'Não autorizado.', status: 401 };
-
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user || data.user.app_metadata?.role !== 'admin') {
-    return { error: 'Não autorizado.', status: 403 };
-  }
-  return { user: data.user };
-}
-
-function sendJson(res, status, payload) {
-  res.status(status).setHeader('Cache-Control', 'no-store').json(payload);
+async function getOfficialCredentials(supabase) {
+  const { data } = await supabase.from('integration_settings').select('value').eq('key', 'whatsapp_official').maybeSingle();
+  return data?.value || null;
 }
 
 export default async function handler(req, res) {
@@ -46,15 +17,19 @@ export default async function handler(req, res) {
   const auth = await requireAdmin(req);
   if (auth.error) return sendJson(res, auth.status, { error: auth.error });
 
-  const accessToken = getEnv('WHATSAPP_ACCESS_TOKEN');
-  const phoneNumberId = getEnv('WHATSAPP_PHONE_NUMBER_ID');
-  const apiVersion = getEnv('WHATSAPP_API_VERSION', 'v18.0');
+  const supabase = getAdminClient();
+  if (!supabase) return sendJson(res, 503, { error: 'Servidor não configurado.' });
+
+  const credentials = await getOfficialCredentials(supabase);
+  const accessToken = credentials?.accessToken || '';
+  const phoneNumberId = credentials?.phoneNumberId || '';
+  const apiVersion = credentials?.apiVersion || 'v18.0';
   const configured = Boolean(accessToken && phoneNumberId);
 
   if (req.method === 'GET') {
     return sendJson(res, configured ? 200 : 503, {
       configured,
-      message: configured ? 'WhatsApp Business API configurada no servidor.' : 'Configure as variáveis privadas do WhatsApp no Vercel.',
+      message: configured ? 'WhatsApp Business API configurada.' : 'Configure a API oficial do WhatsApp no painel.',
     });
   }
 
