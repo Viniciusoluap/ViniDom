@@ -10,6 +10,7 @@ import { BarChart3, Calendar, Users, Briefcase, TrendingUp, Lock, X, MessageCirc
 import { BUSINESS_HOURS, DAY_KEYS } from '../utils/constants';
 import { supabase } from '../lib/supabase';
 import { useBookings } from '../hooks/useBookings';
+import { useClients } from '../hooks/useClients';
 import { useStaff } from '../hooks/useStaff';
 import { dateToKey, formatTime } from '../utils/dateFormatter';
 
@@ -32,9 +33,18 @@ export default function Admin() {
     cancelBooking,
     updateBookingStatus,
     updateBooking,
-    updateClient,
-    deleteClient,
+    reflectClientUpdate,
+    reflectClientDelete,
   } = useBookings(authed);
+  const clientDirectory = useClients(authed && activeTab === 'clientes');
+  const saveAdminClient = async (originalPhone, values) => {
+    const client = await clientDirectory.save(originalPhone, values);
+    if (originalPhone) reflectClientUpdate(originalPhone, client);
+  };
+  const deleteAdminClient = async phone => {
+    await clientDirectory.remove(phone);
+    reflectClientDelete(phone);
+  };
   const { staff, addMember, updateMember, deleteMember } = useStaff();
 
   useEffect(() => {
@@ -251,7 +261,14 @@ export default function Admin() {
       )}
       {activeTab === 'clientes' && renderBookingsTab(
         'Carregando clientes...',
-        <ClientsList bookings={bookings} onUpdate={updateClient} onDelete={deleteClient} />
+        clientDirectory.loading ? <p className="text-sm text-brand-400 py-6">Carregando cadastros...</p> :
+          clientDirectory.error ? (
+            <div className="bg-red-50 border border-red-200 p-5 text-sm text-red-700" role="alert">
+              <p>Não foi possível carregar os clientes.</p>
+              <p className="mt-1">{clientDirectory.error}</p>
+              <button className="btn-secondary mt-4 py-2" onClick={clientDirectory.reload}>Tentar novamente</button>
+            </div>
+          ) : <ClientsList bookings={bookings} registeredClients={clientDirectory.clients} onSave={saveAdminClient} onDelete={deleteAdminClient} />
       )}
       {activeTab === 'funcionarios' && renderBookingsTab(
         'Carregando funcionários...',

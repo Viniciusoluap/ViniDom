@@ -1,133 +1,52 @@
-import { useMemo, useState } from 'react';
-import { Pencil, Trash2, X, Check } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pencil, Trash2, X, Check, UserPlus } from 'lucide-react';
 import { formatPrice, formatDate } from '../utils/dateFormatter';
+import { applyPhoneMask } from '../utils/validation';
+import { buildClientDirectory, normalizeClientPhone, validateClientDetails } from '../utils/clientDirectory';
 
-export default function ClientsList({ bookings, onUpdate, onDelete }) {
-  const [editing, setEditing]   = useState(null);
-  const [form, setForm]         = useState({});
-  const [saving, setSaving]     = useState(false);
+const EMPTY_CLIENT = { name: '', phone: '', email: '', birthdate: '' };
 
-  const clients = useMemo(() => {
-    const map = new Map();
-    bookings.forEach((b) => {
-      const phone = (b.client?.phone || '').replace(/\D/g, '');
-      if (!phone) return;
-      const existing = map.get(phone);
-      const bDate = new Date(b.date);
-      if (!existing) {
-        map.set(phone, {
-          name:       b.client.name      || '',
-          phone:      b.client.phone     || '',
-          email:      b.client.email     || '',
-          birthdate:  b.client.birthdate || '',
-          visits:     b.status !== 'cancelled' ? 1 : 0,
-          totalSpent: b.status !== 'cancelled' ? (b.totalPrice || 0) : 0,
-          lastVisit:  b.status !== 'cancelled' ? bDate : null,
-          lastDate:   bDate,
-        });
-      } else {
-        if (bDate > existing.lastDate) {
-          existing.name      = b.client.name      || existing.name;
-          existing.email     = b.client.email     || existing.email;
-          existing.birthdate = b.client.birthdate || existing.birthdate;
-          existing.lastDate  = bDate;
-        }
-        if (b.status !== 'cancelled') {
-          existing.visits     += 1;
-          existing.totalSpent += b.totalPrice || 0;
-          if (!existing.lastVisit || bDate > existing.lastVisit) existing.lastVisit = bDate;
-        }
-      }
-    });
-    return Array.from(map.values()).sort((a, b) => b.visits - a.visits);
-  }, [bookings]);
+export default function ClientsList({ bookings, registeredClients, onSave, onDelete }) {
+  const [editing, setEditing] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [message, setMessage] = useState(null);
+  const clients = useMemo(() => buildClientDirectory(bookings, registeredClients), [bookings, registeredClients]);
 
-  const startEdit = (c) => {
-    setEditing(c.phone);
-    setForm({ name: c.name, email: c.email, birthdate: c.birthdate });
+  const handleDelete = async (client) => {
+    if (!window.confirm(`Excluir ${client.name || 'este cliente'} e todos os seus agendamentos? Esta ação não pode ser desfeita.`)) return;
+    setDeleting(client.phone);
+    setMessage(null);
+    try {
+      await onDelete(client.phone);
+      setMessage({ text: 'Cliente excluído.', error: false });
+    } catch (err) { setMessage({ text: err.message || 'Não foi possível excluir o cliente.', error: true }); }
+    finally { setDeleting(null); }
   };
-
-  const saveEdit = async () => {
-    setSaving(true);
-    await onUpdate(editing, form);
-    setSaving(false);
-    setEditing(null);
-  };
-
-  const handleDelete = async (c) => {
-    if (!window.confirm(`Excluir ${c.name || 'este cliente'} e todos os seus agendamentos? Esta ação não pode ser desfeita.`)) return;
-    await onDelete(c.phone);
-  };
-
-  if (!clients.length) {
-    return (
-      <div className="bg-white border border-brand-100 p-10 text-center text-brand-300 text-sm">
-        Nenhum cliente cadastrado.
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4 animate-fade-in">
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
-          <div className="bg-white border border-brand-100 w-full max-w-sm p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="font-bold text-brand-900 text-sm tracking-wide">Editar Cliente</h3>
-              <button onClick={() => setEditing(null)} className="text-brand-300 hover:text-brand-900 transition-colors">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-brand-400 uppercase tracking-widest block mb-1">Nome</label>
-                <input
-                  className="input-field"
-                  value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-brand-400 uppercase tracking-widest block mb-1">E-mail</label>
-                <input
-                  type="email"
-                  className="input-field"
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-brand-400 uppercase tracking-widest block mb-1">Nascimento</label>
-                <input
-                  type="date"
-                  className="input-field"
-                  value={form.birthdate}
-                  onChange={e => setForm(f => ({ ...f, birthdate: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button
-                onClick={saveEdit}
-                disabled={saving}
-                className="btn-primary flex-1 flex items-center justify-center gap-2 py-2.5 text-sm"
-              >
-                <Check size={14} />
-                {saving ? 'Salvando…' : 'Salvar'}
-              </button>
-              <button onClick={() => setEditing(null)} className="btn-secondary flex-1 py-2.5 text-sm">
-                Cancelar
-              </button>
-            </div>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-brand-400 uppercase tracking-widest">Total de clientes:</span>
+          <span className="text-sm font-bold text-brand-900">{clients.length}</span>
         </div>
-      )}
-
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-brand-400 uppercase tracking-widest">Total de clientes:</span>
-        <span className="text-sm font-bold text-brand-900">{clients.length}</span>
+        <button id="new-client-button" className="btn-primary flex items-center justify-center gap-2 py-3" disabled={deleting !== null}
+          onClick={() => { setMessage(null); setEditing(EMPTY_CLIENT); }}>
+          <UserPlus size={16} /> Novo cliente
+        </button>
       </div>
-
+      {message && <p role={message.error ? 'alert' : 'status'} className={`p-3 border text-sm ${message.error ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'}`}>{message.text}</p>}
+      {editing && <ClientDialog client={editing} clients={clients} onClose={() => setEditing(null)}
+        onSave={async values => {
+          await onSave(editing.phone || null, values);
+          setEditing(null);
+          setMessage({ text: editing.phone ? 'Cliente atualizado.' : 'Cliente cadastrado.', error: false });
+        }} />}
+      {!clients.length ? (
+        <div className="bg-white border border-brand-100 p-10 text-center text-brand-400 text-sm">
+          Nenhum cliente cadastrado. Clique em Novo cliente para cadastrar o primeiro.
+        </div>
+      ) : (
       <div className="bg-white border border-brand-100 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -148,12 +67,12 @@ export default function ClientsList({ bookings, onUpdate, onDelete }) {
                 <td className="px-4 py-3 font-semibold text-brand-900">{c.name || '—'}</td>
                 <td className="px-4 py-3 text-brand-500">
                   <a
-                    href={`https://wa.me/55${(c.phone || '').replace(/\D/g, '')}`}
+                    href={`https://wa.me/55${c.phone}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-brand-900 transition-colors"
                   >
-                    {c.phone || '—'}
+                    {applyPhoneMask(c.phone)}
                   </a>
                 </td>
                 <td className="px-4 py-3 text-brand-400">{c.email || '—'}</td>
@@ -164,8 +83,10 @@ export default function ClientsList({ bookings, onUpdate, onDelete }) {
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1">
                     <button
-                      onClick={() => startEdit(c)}
-                      title="Editar"
+                      onClick={() => { setMessage(null); setEditing(c); }}
+                      title="Editar cliente"
+                      aria-label={`Editar ${c.name}`}
+                      disabled={deleting !== null}
                       className="p-1.5 text-brand-300 hover:text-brand-900 transition-colors"
                     >
                       <Pencil size={14} />
@@ -173,6 +94,8 @@ export default function ClientsList({ bookings, onUpdate, onDelete }) {
                     <button
                       onClick={() => handleDelete(c)}
                       title="Excluir"
+                      aria-label={`Excluir ${c.name}`}
+                      disabled={deleting !== null}
                       className="p-1.5 text-brand-300 hover:text-red-500 transition-colors"
                     >
                       <Trash2 size={14} />
@@ -184,7 +107,76 @@ export default function ClientsList({ bookings, onUpdate, onDelete }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
+  );
+}
+
+function ClientDialog({ client, clients, onSave, onClose }) {
+  const dialogRef = useRef(null);
+  const [form, setForm] = useState({ name: client.name || '', phone: client.phone ? applyPhoneMask(client.phone) : '', email: client.email || '', birthdate: client.birthdate || '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const opener = document.activeElement;
+    dialog.showModal();
+    dialog.querySelector('#client-name')?.focus();
+    return () => {
+      dialog.close();
+      if (opener?.isConnected) opener.focus();
+      else document.getElementById('new-client-button')?.focus();
+    };
+  }, []);
+  const submit = async event => {
+    event.preventDefault();
+    if (saving) return;
+    const validation = validateClientDetails(form);
+    if (validation) { setError(validation); return; }
+    const phone = normalizeClientPhone(form.phone);
+    if (clients.some(c => c.phone === phone && c.phone !== normalizeClientPhone(client.phone))) {
+      setError('Já existe um cliente com este WhatsApp. Edite o cadastro existente.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try { await onSave(form); }
+    catch (err) { setError(err.message || 'Não foi possível salvar o cliente.'); }
+    finally { setSaving(false); }
+  };
+  const fields = [
+    { key: 'name', label: 'Nome *', type: 'text', required: true, maxLength: 120, autoComplete: 'name' },
+    { key: 'phone', label: 'WhatsApp com DDD *', type: 'tel', required: true, autoComplete: 'tel-national' },
+    { key: 'email', label: 'E-mail', type: 'email', maxLength: 254, autoComplete: 'email' },
+    { key: 'birthdate', label: 'Nascimento', type: 'date', min: '1900-01-01', max: new Date().toLocaleDateString('en-CA'), autoComplete: 'bday' },
+  ];
+  return (
+    <dialog ref={dialogRef} aria-labelledby="client-dialog-title"
+      onCancel={event => { event.preventDefault(); if (!saving) onClose(); }}
+      className="w-[calc(100%-2rem)] max-w-md max-h-[90dvh] overflow-y-auto bg-white p-6 border border-brand-100 shadow-xl backdrop:bg-black/50">
+      <form onSubmit={submit}>
+        <div className="flex items-center justify-between mb-5 gap-3">
+          <h3 id="client-dialog-title" className="font-bold text-brand-900">{client.phone ? 'Editar cliente' : 'Novo cliente'}</h3>
+          <button type="button" aria-label="Fechar formulário" disabled={saving} onClick={onClose} className="p-2 text-brand-400 hover:text-brand-900"><X size={18} /></button>
+        </div>
+        <fieldset disabled={saving} className="space-y-3">
+          {fields.map(({ key, label, ...props }) => (
+            <div key={key}>
+              <label htmlFor={`client-${key}`} className="text-sm font-medium text-brand-500 block mb-1">{label}</label>
+              <input {...props} id={`client-${key}`} className="input-field" value={form[key]}
+                onChange={event => setForm(prev => ({ ...prev, [key]: key === 'phone' && event.target.value ? applyPhoneMask(event.target.value) : event.target.value }))} />
+            </div>
+          ))}
+        </fieldset>
+        {error && <p role="alert" className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 p-3">{error}</p>}
+        <div className="flex flex-wrap gap-3 mt-5">
+          <button type="submit" disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2 py-3 disabled:opacity-50">
+            <Check size={16} /> {saving ? 'Salvando…' : 'Salvar cliente'}
+          </button>
+          <button type="button" disabled={saving} onClick={onClose} className="btn-secondary py-3">Cancelar</button>
+        </div>
+      </form>
+    </dialog>
   );
 }
 

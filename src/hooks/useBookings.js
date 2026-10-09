@@ -8,6 +8,7 @@ import {
   deleteClientByPhone as svcDelete,
 } from '../utils/bookingService';
 import { supabase } from '../lib/supabase';
+import { normalizeClientPhone } from '../utils/clientDirectory';
 import { dateToKey } from '../utils/dateFormatter';
 
 export function useBookings(enabled = true) {
@@ -175,7 +176,17 @@ export function useBookings(enabled = true) {
     setBookings(prev => prev.filter(b => (b.client?.phone || '').replace(/\D/g, '') !== digits));
   }, []);
 
+  const reflectClientUpdate = (phone, values) => {
+    setBookings(prev => prev.map(b => normalizeClientPhone(b.client?.phone) === normalizeClientPhone(phone)
+      ? { ...b, client: { ...b.client, ...values } } : b));
+  };
+  const reflectClientDelete = phone => {
+    setBookings(prev => prev.filter(b => normalizeClientPhone(b.client?.phone) !== normalizeClientPhone(phone)));
+  };
+
   return {
+    reflectClientUpdate,
+    reflectClientDelete,
     bookings,
     loading,
     cancelBooking,
