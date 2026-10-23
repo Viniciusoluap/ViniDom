@@ -10,6 +10,10 @@ const GET_PUBLIC_BOOKING_RPC = 'get_public_booking_v2';
 // Cache de slots por data — evita re-queries ao trocar datas no calendário
 const slotsCache = new Map();
 
+export function invalidateBookedSlots(dateKey) {
+  slotsCache.delete(dateKey);
+}
+
 function loadLocal() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
 }

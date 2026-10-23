@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Pencil, X, Search, Trash2, Plus } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import InternalBookingForm from './InternalBookingForm';
 import { DAY_NAMES_PT, MONTH_NAMES_PT, SERVICES } from '../utils/constants';
 import { formatTime, formatPrice } from '../utils/dateFormatter';
 import { dateToKey } from '../utils/dateFormatter';
@@ -39,7 +39,7 @@ function getMonthGrid(date) {
   return cells;
 }
 
-export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit, onCancel }) {
+export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit, onCancel, onBookingCreated }) {
   const [viewMode, setViewMode]                = useState('day');
   const [selectedDate, setSelectedDate]        = useState(new Date());
   const [staffFilter, setStaffFilter]          = useState('all');
@@ -47,6 +47,7 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit, o
   const [selectedBooking, setSelectedBooking]  = useState(null);
   const [editingBooking, setEditingBooking]    = useState(null);
   const [editServices, setEditServices]        = useState([]);
+  const [showBookingForm, setShowBookingForm]   = useState(false);
 
   const dateInputRef = useRef(null);
 
@@ -248,9 +249,10 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit, o
         )}
       </div>
 
-      <Link to="/agendamento?interno=1" className="btn-primary inline-flex items-center justify-center gap-2 text-xs w-full sm:w-auto">
+      <button type="button" onClick={() => setShowBookingForm(true)} className="btn-primary inline-flex items-center justify-center gap-2 text-xs w-full sm:w-auto">
         <Plus size={14} /> Novo agendamento
-      </Link>
+      </button>
+      {showBookingForm && <InternalBookingForm date={selectedDate} staff={staff} onClose={() => setShowBookingForm(false)} onCreated={async key => { await onBookingCreated(); setSelectedDate(new Date(`${key}T12:00:00`)); setViewMode('day'); }} />}
 
       {/* ── Header bar ── */}
       <div className="bg-white border border-brand-100 p-4 space-y-3">

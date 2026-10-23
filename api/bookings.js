@@ -30,13 +30,7 @@ function safeCalendarError(error) {
     .slice(0, 240);
 }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return sendJson(res, 405, { error: 'Método não permitido.' });
-  }
-
-  const body = parseBody(req);
+export async function createBooking(body, res) {
   if (!validBookingBody(body)) return sendJson(res, 400, { error: 'Dados de agendamento inválidos.' });
 
   const supabase = getAdminClient();
@@ -124,4 +118,12 @@ export default async function handler(req, res) {
     calendarSyncStatus: booking.calendarSyncStatus,
     calendarConfigured: isCalendarConfigured(config),
   });
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return sendJson(res, 405, { error: 'Método não permitido.' });
+  }
+  return createBooking(parseBody(req), res);
 }
