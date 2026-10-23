@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "VCVisagismo",
+  "short_name": "VCVisagismo",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#080808",
+  "theme_color": "#080808",
+  "icons": [
+    {
+      "src": "/icon-vc.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
