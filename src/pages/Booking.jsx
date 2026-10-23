@@ -16,6 +16,8 @@ import { loadStaff } from '../utils/staffService';
 import { getDurationTotals, normalizeServicesForBooking } from '../utils/bookingDuration';
 import { getCalendarBookedSlots } from '../utils/calendarService';
 import { loadAvailability } from '../utils/availability';
+import { loadClients } from '../utils/clientService';
+import { supabase } from '../lib/supabase';
 
 const STEPS = ['Serviço', 'Data & Hora', 'Profissional', 'Seus Dados', 'Confirmar'];
 const EMPTY_CLIENT = { name: '', phone: '', email: '', notes: '', birthdate: '' };
@@ -33,12 +35,33 @@ export default function Booking() {
   const [staffList]                             = useState(() => loadStaff());
   const [selectedStaff, setSelectedStaff]       = useState(() => loadStaff()[0]);
   const [client, setClient]                     = useState(EMPTY_CLIENT);
+  const [registeredClients, setRegisteredClients] = useState([]);
+  const [internalRole, setInternalRole] = useState(null);
   const [loading, setLoading]                   = useState(false);
   const [activeCategory, setActiveCategory]     = useState('Todos');
   const [bookedSlots, setBookedSlots]           = useState([]);
   const [availabilityStatus, setAvailabilityStatus] = useState('idle');
   const [availabilityAttempt, setAvailabilityAttempt] = useState(0);
   const availabilityRequest = useRef(0);
+
+  useEffect(() => {
+    if (searchParams.get('interno') !== '1' || !supabase) return undefined;
+    let active = true;
+    supabase.auth.getUser().then(async ({ data }) => {
+      const role = data.user?.app_metadata?.role;
+      if (!active || !['admin', 'staff'].includes(role)) return;
+      setInternalRole(role);
+      if (role === 'staff' && data.user.app_metadata.professional_name) {
+        const name = data.user.app_metadata.professional_name;
+        setSelectedStaff(loadStaff().find(s => s.name === name) || { name });
+      }
+      try {
+        const clients = await loadClients();
+        if (active) setRegisteredClients(clients);
+      } catch (err) { console.error('Não foi possível carregar os clientes cadastrados:', err); }
+    });
+    return () => { active = false; };
+  }, [searchParams]);
 
   const { commercialDuration: totalDuration, operationalDuration } = getDurationTotals(selectedServices);
   const totalPrice = selectedServices.reduce((s, svc) => s + svc.price, 0);
@@ -122,9 +145,11 @@ export default function Booking() {
         professional: selectedStaff?.name || null,
         client,
       });
-      await sendBookingConfirmation({ services: selectedServices, date: booking.date, timeSlot: selectedSlot, totalPrice, client });
-      const waLink = buildWhatsAppLink({ services: selectedServices, date: selectedDate, time: selectedSlot, clientName: client.name });
-      window.open(waLink, '_blank');
+      if (!internalRole) {
+        await sendBookingConfirmation({ services: selectedServices, date: booking.date, timeSlot: selectedSlot, totalPrice, client });
+        const waLink = buildWhatsAppLink({ services: selectedServices, date: selectedDate, time: selectedSlot, clientName: client.name });
+        window.open(waLink, '_blank');
+      }
       navigate(`/confirmacao?id=${booking.id}`);
     } catch (err) {
       console.error('Erro ao confirmar agendamento:', err);
@@ -256,7 +281,7 @@ export default function Booking() {
           <h2 className="font-semibold text-brand-900 text-base mb-2 tracking-wide">Escolha o Profissional</h2>
           <p className="text-brand-400 text-sm mb-6">Selecione com quem deseja ser atendido.</p>
           <div className="space-y-3 mb-8">
-            {staffList.map(member => {
+            {(internalRole === 'staff' ? [selectedStaff].filter(Boolean) : staffList).map(member => {
               const selected = selectedStaff?.id === member.id;
               return (
                 <button
@@ -302,6 +327,19 @@ export default function Booking() {
       {step === 3 && (
         <div className="animate-slide-up max-w-lg mx-auto">
           <h2 className="font-semibold text-brand-900 text-base mb-6 tracking-wide">Seus Dados</h2>
+          {internalRole && (
+            <label className="block text-xs font-semibold text-brand-500 uppercase tracking-widest mb-5">
+              Vincular cliente cadastrado
+              <select className="input-field w-full mt-2" value={registeredClients.find(c => c.phone.replace(/\D/g, '') === client.phone.replace(/\D/g, ''))?.phone_digits || ''}
+                onChange={e => {
+                  const c = registeredClients.find(item => item.phone_digits === e.target.value);
+                  setClient(c ? { name: c.name, phone: c.phone, email: c.email || '', birthdate: c.birthdate || '', notes: c.notes || '' } : EMPTY_CLIENT);
+                }}>
+                <option value="">Novo cliente / preencher dados</option>
+                {registeredClients.map(c => <option key={c.phone_digits} value={c.phone_digits}>{c.name} · {c.phone}</option>)}
+              </select>
+            </label>
+          )}
           <BookingForm value={client} onChange={setClient} onSubmit={goNext} />
           <button onClick={goBack} className="btn-secondary w-full mt-3 py-3">← Voltar</button>
         </div>

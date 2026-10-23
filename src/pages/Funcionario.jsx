@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { UserCircle, CheckCircle, XCircle, Clock, Calendar, ChevronLeft, ChevronRight, Eye, EyeOff, BarChart3 } from 'lucide-react';
+import { UserCircle, CheckCircle, XCircle, Clock, Calendar, ChevronLeft, ChevronRight, Eye, EyeOff, BarChart3, Users, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import ClientsList from '../components/ClientsList';
 import { DAY_NAMES_PT, MONTH_NAMES_PT } from '../utils/constants';
 import { useBookings } from '../hooks/useBookings';
 import { supabase } from '../lib/supabase';
@@ -14,6 +16,7 @@ const STATUS_LABELS = {
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 size={14} /> },
   { id: 'agenda',    label: 'Agenda',    icon: <Calendar  size={14} /> },
+  { id: 'clientes',  label: 'Clientes',  icon: <Users size={14} /> },
 ];
 
 export default function Funcionario() {
@@ -334,6 +337,10 @@ export default function Funcionario() {
       {/* ── Agenda Tab ── */}
       {!loading && activeTab === 'agenda' && (
         <div className="space-y-6 animate-fade-in">
+          <Link to={`/agendamento?interno=1&profissional=${encodeURIComponent(staffMember.name)}`}
+            className="btn-primary inline-flex items-center justify-center gap-2 text-xs w-full sm:w-auto">
+            <Plus size={14} /> Novo agendamento
+          </Link>
 
           {/* Navegação de data */}
           <div className="flex items-center gap-3 bg-white border border-brand-100 p-4">
@@ -377,6 +384,9 @@ export default function Funcionario() {
             )}
           </Section>
         </div>
+      )}
+      {!loading && activeTab === 'clientes' && (
+        <ClientsList bookings={bookings} canDelete={false} />
       )}
     </div>
   );
