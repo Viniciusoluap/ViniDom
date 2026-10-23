@@ -82,6 +82,8 @@ export default function WhatsAppHub({ bookings }) {
   const [web, setWeb] = useState({ configured: false, serviceUrl: '', serviceSecretPreview: '' });
   const [webConn, setWebConn] = useState({ status: 'disconnected', phone: null });
   const [webQr, setWebQr] = useState(null);
+  const [webStatusError, setWebStatusError] = useState('');
+  const [webRetry, setWebRetry] = useState(0);
 
   const [officialForm, setOfficialForm] = useState({ accessToken: '', phoneNumberId: '' });
   const [officialSaving, setOfficialSaving] = useState(false);
@@ -148,21 +150,27 @@ export default function WhatsAppHub({ bookings }) {
     const poll = async () => {
       try {
         const { ok, data } = await authFetch('/api/whatsapp-web?action=status');
-        if (active && ok) setWebConn({ status: data.status, phone: data.phone });
+        if (active) {
+          setWebConn({ status: ok ? data.status : 'unreachable', phone: data.phone || null });
+          setWebStatusError(data.error || (!ok ? 'Não foi possível consultar o serviço.' : ''));
+        }
         if (active && ok && data.status === 'qr_pending') {
           const qrResult = await authFetch('/api/whatsapp-web?action=qr');
-          if (active && qrResult.ok) setWebQr(qrResult.data.qr);
+          if (active) {
+            setWebQr(qrResult.ok ? qrResult.data.qr : null);
+            if (!qrResult.ok) setWebStatusError(qrResult.data.error || 'Falha ao carregar o QR Code.');
+          }
         } else if (active) {
           setWebQr(null);
         }
-      } catch {
-        /* ignora falhas pontuais de polling */
+      } catch (err) {
+        if (active) setWebStatusError(err.message || 'Não foi possível consultar o serviço.');
       }
     };
     void poll();
     const id = setInterval(poll, 4000);
     return () => { active = false; clearInterval(id); };
-  }, [web.configured]);
+  }, [web.configured, webRetry]);
 
   const saveOfficial = async () => {
     if (!officialForm.accessToken.trim() || !officialForm.phoneNumberId.trim()) return;
@@ -205,9 +213,17 @@ export default function WhatsAppHub({ bookings }) {
   };
 
   const disconnectWeb = async () => {
+    setWebSaving(true);
+    setWebMsg('');
     try {
-      await authFetch('/api/whatsapp-web', { method: 'POST', body: JSON.stringify({ action: 'disconnect' }) });
-    } catch { /* ignora */ }
+      const { ok, data } = await authFetch('/api/whatsapp-web', { method: 'POST', body: JSON.stringify({ action: 'disconnect' }) });
+      if (!ok) throw new Error(data.error || 'Não foi possível reiniciar a conexão.');
+      setWebQr(null);
+      setWebConn({ status: 'connecting', phone: null });
+      setWebMsg('Conexão reiniciada. Aguarde o novo QR Code.');
+      setWebRetry(n => n + 1);
+    } catch (err) { setWebMsg(err.message); }
+    finally { setWebSaving(false); }
   };
 
   const isConnected = channel === 'official' ? official.configured : (web.configured && webConn.status === 'connected');
@@ -396,7 +412,7 @@ export default function WhatsAppHub({ bookings }) {
           </h2>
           <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 ${webConn.status === 'connected' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
             {webConn.status === 'connected' ? <Wifi size={10} /> : <WifiOff size={10} />}
-            {!web.configured ? 'Não configurado' : webConn.status === 'connected' ? 'Conectado' : webConn.status === 'qr_pending' ? 'Aguardando QR Code' : 'Desconectado'}
+            {!web.configured ? 'Não configurado' : webConn.status === 'connected' ? 'Conectado' : webConn.status === 'qr_pending' ? 'Aguardando leitura do QR Code' : webConn.status === 'connecting' ? 'Conectando' : webConn.status === 'unreachable' ? 'Serviço indisponível' : 'Desconectado'}
           </span>
         </div>
 
@@ -453,6 +469,10 @@ export default function WhatsAppHub({ bookings }) {
             <p className="text-xs text-brand-400 flex items-center gap-2"><RefreshCw size={13} className="animate-spin" /> Conectando ao serviço...</p>
           )}
 
+          {web.configured && webStatusError && (
+            <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 p-3">{webStatusError}</p>
+          )}
+
           <div className="flex items-center gap-3">
             {!web.configured ? (
               <button
@@ -463,12 +483,17 @@ export default function WhatsAppHub({ bookings }) {
                 <Smartphone size={13} /> {webSaving ? 'Conectando...' : 'Conectar serviço'}
               </button>
             ) : (
-              <button
-                onClick={disconnectWeb}
-                className="btn-secondary text-xs flex items-center gap-1.5 py-2"
-              >
-                <LogOut size={13} /> Desconectar número
-              </button>
+              <>
+                {webConn.status !== 'connected' && (
+                  <button onClick={() => setWebRetry(n => n + 1)} className="btn-secondary text-xs flex items-center gap-1.5 py-2">
+                    <RefreshCw size={13} /> Atualizar QR Code
+                  </button>
+                )}
+                <button onClick={disconnectWeb} disabled={webSaving || webConn.status === 'unreachable'}
+                  className="btn-secondary text-xs flex items-center gap-1.5 py-2 disabled:opacity-40">
+                  <LogOut size={13} /> {webSaving ? 'Aguarde...' : webConn.status === 'connected' ? 'Desconectar número' : 'Gerar novo QR Code'}
+                </button>
+              </>
             )}
             {webMsg && <p className="text-xs text-brand-500">{webMsg}</p>}
           </div>

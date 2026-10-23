@@ -19,12 +19,14 @@ sempre ligado, como o [Railway](https://railway.app).
 
 ## Deploy no Railway
 
-1. Crie um novo projeto no Railway e aponte para a pasta `whatsapp-service/` deste repositório (ou faça deploy manual enviando só esta pasta).
+1. No serviço `vinidom` do Railway, configure **Root Directory** como `/whatsapp-service` para executar o `server.js`. Como alternativa, deixe a raiz `/`: o `Dockerfile` da raiz instala e inicia esse mesmo serviço. Não configure um Start Command que inicie o site Vite.
 2. Em **Variables**, adicione `SERVICE_SECRET` com um valor aleatório e forte.
 3. Em **Volumes**, crie um volume e monte em `/data/auth`; defina `AUTH_DIR=/data/auth`.
-4. Faça o deploy. Nos logs, aguarde a mensagem `Serviço ouvindo na porta...`.
+4. Faça o deploy. Nos logs, aguarde a mensagem `Serviço ouvindo na porta...`. Teste `https://vinidom-production.up.railway.app/health`: a resposta deve ser `{"ok":true}`. Se aparecer o HTML do site, o Railway ainda está executando o aplicativo errado.
 5. No painel do ViniDom (aba WhatsApp → WhatsApp Web), informe a **URL pública do serviço** (Railway gera algo como `https://seu-servico.up.railway.app`) e o mesmo valor de `SERVICE_SECRET`.
 6. Escaneie o QR Code exibido no painel com o WhatsApp do número que vai enviar as mensagens (Configurações → Aparelhos conectados → Conectar um aparelho).
+
+Se o painel exibir **Serviço indisponível**, confira `/health`, `SERVICE_SECRET` e os logs do Railway. O botão **Gerar novo QR Code** reinicia o pareamento quando o serviço já está acessível.
 
 ## Endpoints
 
