@@ -28,11 +28,13 @@ export async function getClientByPhone(phone) {
   const digits = phone.replace(/\D/g, '');
   if (digits.length < 10) return null;
 
-    // Não consulta PII no banco pelo telefone a partir do navegador público.
-  // O preenchimento automático usa apenas dados já armazenados localmente neste dispositivo.
-
-
-
+  if (import.meta.env.PROD) {
+    const response = await fetch(`/api/client-lookup?phone=${encodeURIComponent(digits)}`);
+    if (response.ok) {
+      const found = await response.json();
+      if (found.name) return { name: found.name, phone, email: '', notes: '', birthdate: '' };
+    }
+  }
   const local = loadLocal();
   const match = local
     .slice()

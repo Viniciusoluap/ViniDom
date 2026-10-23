@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Pencil, X, Search, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Pencil, X, Search, Trash2, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { DAY_NAMES_PT, MONTH_NAMES_PT, SERVICES } from '../utils/constants';
 import { formatTime, formatPrice } from '../utils/dateFormatter';
 import { dateToKey } from '../utils/dateFormatter';
@@ -246,6 +247,10 @@ export default function Agenda({ bookings, staff = [], onUpdateStatus, onEdit, o
           </p>
         )}
       </div>
+
+      <Link to="/agendamento?interno=1" className="btn-primary inline-flex items-center justify-center gap-2 text-xs w-full sm:w-auto">
+        <Plus size={14} /> Novo agendamento
+      </Link>
 
       {/* ── Header bar ── */}
       <div className="bg-white border border-brand-100 p-4 space-y-3">
