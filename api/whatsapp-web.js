@@ -17,8 +17,18 @@ async function callService(config, path, options = {}) {
       ...(options.headers || {}),
     },
   });
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    return { ok: false, status: response.status, error: 'wrong_service' };
+  }
   const data = await response.json().catch(() => ({}));
   return { ok: response.ok, status: response.status, data };
+}
+
+function serviceError(result) {
+  if (!result) return 'Serviço do WhatsApp Web indisponível.';
+  if (result.error === 'wrong_service') return 'Esta URL abre o site, não o serviço de WhatsApp Web. Configure o Railway para executar whatsapp-service.';
+  if (result.status === 401) return 'O segredo do serviço não confere com o SERVICE_SECRET do Railway.';
+  return 'Não foi possível consultar o serviço do WhatsApp Web.';
 }
 
 export default async function handler(req, res) {
@@ -42,12 +52,15 @@ export default async function handler(req, res) {
 
     if (action === 'qr') {
       const result = await callService(config, '/qr').catch(() => null);
-      if (!result || !result.ok) return sendJson(res, 200, { configured: true, qr: null });
+      if (!result || !result.ok) return sendJson(res, 502, { configured: true, error: serviceError(result) });
       return sendJson(res, 200, { configured: true, qr: result.data.qrDataUrl || null });
     }
 
     const result = await callService(config, '/status').catch(() => null);
-    if (!result || !result.ok) return sendJson(res, 200, { configured: true, status: 'unreachable' });
+    if (!result || !result.ok) return sendJson(res, 200, { configured: true, status: 'unreachable', error: serviceError(result) });
+    if (!['connecting', 'qr_pending', 'connected', 'disconnected'].includes(result.data.status)) {
+      return sendJson(res, 200, { configured: true, status: 'unreachable', error: 'O serviço respondeu sem um estado de conexão válido.' });
+    }
     return sendJson(res, 200, { configured: true, status: result.data.status || 'unknown', phone: result.data.phone || null });
   }
 
@@ -58,7 +71,7 @@ export default async function handler(req, res) {
 
   if (action === 'disconnect') {
     const result = await callService(config, '/disconnect', { method: 'POST' }).catch(() => null);
-    return sendJson(res, result?.ok ? 200 : 502, { ok: Boolean(result?.ok) });
+    return sendJson(res, result?.ok ? 200 : 502, { ok: Boolean(result?.ok), ...(!result?.ok ? { error: serviceError(result) } : {}) });
   }
 
   if (action === 'send') {
