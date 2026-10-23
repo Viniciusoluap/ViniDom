@@ -247,6 +247,7 @@ export default function Admin() {
           onUpdateStatus={updateBookingStatus}
           onEdit={updateBooking}
           onCancel={cancelBooking}
+          onBookingCreated={reloadBookings}
         />
       )}
       {activeTab === 'clientes' && renderBookingsTab(

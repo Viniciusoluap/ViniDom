@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { UserCircle, CheckCircle, XCircle, Clock, Calendar, ChevronLeft, ChevronRight, Eye, EyeOff, BarChart3, Users, Plus } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import InternalBookingForm from '../components/InternalBookingForm';
 import ClientsList from '../components/ClientsList';
 import { DAY_NAMES_PT, MONTH_NAMES_PT } from '../utils/constants';
 import { useBookings } from '../hooks/useBookings';
@@ -30,6 +30,7 @@ export default function Funcionario() {
   const [staffMember, setStaffMember] = useState(null);
   const [activeTab, setActiveTab]     = useState('dashboard');
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showBookingForm, setShowBookingForm] = useState(false);
 
   const {
     bookings,
@@ -337,10 +338,11 @@ export default function Funcionario() {
       {/* ── Agenda Tab ── */}
       {!loading && activeTab === 'agenda' && (
         <div className="space-y-6 animate-fade-in">
-          <Link to={`/agendamento?interno=1&profissional=${encodeURIComponent(staffMember.name)}`}
+          <button type="button" onClick={() => setShowBookingForm(true)}
             className="btn-primary inline-flex items-center justify-center gap-2 text-xs w-full sm:w-auto">
             <Plus size={14} /> Novo agendamento
-          </Link>
+          </button>
+          {showBookingForm && <InternalBookingForm date={selectedDate} staff={[staffMember]} fixedProfessional={staffMember.name} onClose={() => setShowBookingForm(false)} onCreated={async key => { await reloadBookings(); setSelectedDate(new Date(`${key}T12:00:00`)); }} />}
 
           {/* Navegação de data */}
           <div className="flex items-center gap-3 bg-white border border-brand-100 p-4">
