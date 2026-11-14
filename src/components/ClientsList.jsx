@@ -1,16 +1,34 @@
-import { useMemo, useState } from 'react';
-import { Pencil, Trash2, X, Check } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Pencil, Trash2, X, Check, Plus } from 'lucide-react';
 import { formatPrice, formatDate } from '../utils/dateFormatter';
+import { editClient, loadClients, phoneDigits, removeClient, saveClient } from '../utils/clientService';
+import ClientRegistration from './ClientRegistration';
 
-export default function ClientsList({ bookings, onUpdate, onDelete }) {
+export default function ClientsList({ bookings, onUpdate, onDelete, canDelete = true }) {
   const [editing, setEditing]   = useState(null);
   const [form, setForm]         = useState({});
   const [saving, setSaving]     = useState(false);
+  const [registered, setRegistered] = useState([]);
+  const [loadError, setLoadError] = useState('');
+  const [formError, setFormError] = useState('');
+  const [showRegistration, setShowRegistration] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    loadClients().then(list => { if (active) setRegistered(list); })
+      .catch(err => { if (active) setLoadError(err.message || 'Não foi possível carregar os clientes.'); });
+    return () => { active = false; };
+  }, []);
+
+  const createClient = async form => {
+    await saveClient(form);
+    setRegistered(await loadClients());
+  };
 
   const clients = useMemo(() => {
     const map = new Map();
     bookings.forEach((b) => {
-      const phone = (b.client?.phone || '').replace(/\D/g, '');
+      const phone = phoneDigits(b.client?.phone);
       if (!phone) return;
       const existing = map.get(phone);
       const bDate = new Date(b.date);
@@ -39,8 +57,16 @@ export default function ClientsList({ bookings, onUpdate, onDelete }) {
         }
       }
     });
-    return Array.from(map.values()).sort((a, b) => b.visits - a.visits);
-  }, [bookings]);
+    registered.forEach(c => {
+      const existing = map.get(c.phone_digits);
+      if (existing) Object.assign(existing, { name: c.name, phone: c.phone, email: c.email || '', birthdate: c.birthdate || '' });
+      else map.set(c.phone_digits, {
+        name: c.name, phone: c.phone, email: c.email || '', birthdate: c.birthdate || '',
+        visits: 0, totalSpent: 0, lastVisit: null,
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => b.visits - a.visits || a.name.localeCompare(b.name));
+  }, [bookings, registered]);
 
   const startEdit = (c) => {
     setEditing(c.phone);
@@ -49,26 +75,30 @@ export default function ClientsList({ bookings, onUpdate, onDelete }) {
 
   const saveEdit = async () => {
     setSaving(true);
-    await onUpdate(editing, form);
-    setSaving(false);
-    setEditing(null);
+    setFormError('');
+    try {
+      const isRegistered = registered.some(c => c.phone_digits === phoneDigits(editing));
+      if (isRegistered) await editClient(editing, form);
+      if (onUpdate) await onUpdate(editing, form);
+      setRegistered(await loadClients());
+      setEditing(null);
+    } catch (err) { setFormError(err.message || 'Não foi possível salvar.'); }
+    finally { setSaving(false); }
   };
 
   const handleDelete = async (c) => {
     if (!window.confirm(`Excluir ${c.name || 'este cliente'} e todos os seus agendamentos? Esta ação não pode ser desfeita.`)) return;
-    await onDelete(c.phone);
+    try {
+      if (onDelete) await onDelete(c.phone);
+      await removeClient(c.phone);
+      setRegistered(await loadClients());
+    } catch (err) { setLoadError(err.message || 'Não foi possível excluir o cliente.'); }
   };
-
-  if (!clients.length) {
-    return (
-      <div className="bg-white border border-brand-100 p-10 text-center text-brand-300 text-sm">
-        Nenhum cliente cadastrado.
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {showRegistration && <ClientRegistration onSave={createClient} onClose={() => setShowRegistration(false)} />}
+      {loadError && <p role="alert" className="text-red-600 text-xs">{loadError}</p>}
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
           <div className="bg-white border border-brand-100 w-full max-w-sm p-6 shadow-xl">
@@ -106,6 +136,7 @@ export default function ClientsList({ bookings, onUpdate, onDelete }) {
                 />
               </div>
             </div>
+            {formError && <p role="alert" className="text-red-600 text-xs mt-3">{formError}</p>}
             <div className="flex gap-3 mt-5">
               <button
                 onClick={saveEdit}
@@ -123,11 +154,17 @@ export default function ClientsList({ bookings, onUpdate, onDelete }) {
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-brand-400 uppercase tracking-widest">Total de clientes:</span>
-        <span className="text-sm font-bold text-brand-900">{clients.length}</span>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-brand-400 uppercase tracking-widest">Total de clientes:</span>
+          <span className="text-sm font-bold text-brand-900">{clients.length}</span>
+        </div>
+        <button onClick={() => setShowRegistration(true)} className="btn-primary flex items-center justify-center gap-2 text-xs">
+          <Plus size={14} /> Cadastrar cliente
+        </button>
       </div>
 
+      {!clients.length ? <div className="bg-white border border-brand-100 p-10 text-center text-brand-300 text-sm">Nenhum cliente cadastrado.</div> : (
       <div className="bg-white border border-brand-100 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -170,13 +207,13 @@ export default function ClientsList({ bookings, onUpdate, onDelete }) {
                     >
                       <Pencil size={14} />
                     </button>
-                    <button
+                    {canDelete && <button
                       onClick={() => handleDelete(c)}
                       title="Excluir"
                       className="p-1.5 text-brand-300 hover:text-red-500 transition-colors"
                     >
                       <Trash2 size={14} />
-                    </button>
+                    </button>}
                   </div>
                 </td>
               </tr>
@@ -184,6 +221,7 @@ export default function ClientsList({ bookings, onUpdate, onDelete }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

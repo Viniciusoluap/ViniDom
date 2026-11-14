@@ -1,0 +1,7 @@
+**/node_modules
+.git
+dist
+.env*
+!whatsapp-service/package.json
+!whatsapp-service/package-lock.json
+**/auth

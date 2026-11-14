@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { to: '/servicos',label: 'Serviços' },
   { to: '/sobre',   label: 'Sobre' },
   { to: '/contato', label: 'Contato' },
+  { to: '/instalar-aplicativo', label: 'Instalar aplicativo' },
 ];
 
 export default function Header() {

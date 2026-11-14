@@ -30,13 +30,7 @@ function safeCalendarError(error) {
     .slice(0, 240);
 }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return sendJson(res, 405, { error: 'Método não permitido.' });
-  }
-
-  const body = parseBody(req);
+export async function createBooking(body, res) {
   if (!validBookingBody(body)) return sendJson(res, 400, { error: 'Dados de agendamento inválidos.' });
 
   const supabase = getAdminClient();
@@ -72,6 +66,20 @@ export default async function handler(req, res) {
 
   const rowResult = await supabase.from('bookings').select('*').eq('id', bookingId).limit(1).maybeSingle();
   if (rowResult.error || !rowResult.data) return sendJson(res, 500, { error: 'Reserva criada, mas não foi possível carregar o resultado.' });
+
+  // Cadastro pelo WhatsApp: preserva dados já registrados pela equipe.
+  const digits = String(body.client.phone).replace(/\D/g, '');
+  if (/^[0-9]{10,11}$/.test(digits)) {
+    const { error: clientError } = await supabase.from('clients').upsert({
+      phone_digits: digits,
+      phone: body.client.phone,
+      name: body.client.name.trim(),
+      email: body.client.email || null,
+      birthdate: body.client.birthdate || null,
+      notes: body.client.notes || null,
+    }, { onConflict: 'phone_digits', ignoreDuplicates: true });
+    if (clientError) console.error('Falha ao vincular cadastro ao WhatsApp:', clientError.message);
+  }
 
   let row = rowResult.data;
   if (isCalendarConfigured(config)) {
@@ -110,4 +118,12 @@ export default async function handler(req, res) {
     calendarSyncStatus: booking.calendarSyncStatus,
     calendarConfigured: isCalendarConfigured(config),
   });
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return sendJson(res, 405, { error: 'Método não permitido.' });
+  }
+  return createBooking(parseBody(req), res);
 }

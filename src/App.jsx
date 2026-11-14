@@ -7,6 +7,7 @@ import Booking from './pages/Booking';
 import Confirmation from './pages/Confirmation';
 import About from './pages/About';
 import Contact from './pages/Contact';
+import InstallApp from './pages/InstallApp';
 import Admin from './pages/Admin';
 import Funcionario from './pages/Funcionario';
 import CancellationPolicy from './pages/CancellationPolicy';
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="/confirmacao" element={<Confirmation />} />
           <Route path="/sobre" element={<About />} />
           <Route path="/contato" element={<Contact />} />
+          <Route path="/instalar-aplicativo" element={<InstallApp />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/funcionario" element={<Funcionario />} />
           <Route path="/politica-cancelamento" element={<CancellationPolicy />} />
