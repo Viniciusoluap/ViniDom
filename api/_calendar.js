@@ -208,3 +208,37 @@ export async function listBusyEvents({ timeMin, timeMax }, config = getCalendarC
     }))
     .filter((event) => event.start && event.end);
 }
+
+function isDateKeyValue(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+}
+
+function nextDateKey(dateKey) {
+  const date = new Date(`${dateKey}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function dayBoundary(dateKey, offset) {
+  return new Date(`${dateKey}T00:00:00${offset}`);
+}
+
+function eventMinutes(eventValue, dateKey, offset) {
+  const start = dayBoundary(dateKey, offset).getTime();
+  const value = isDateKeyValue(eventValue) ? dayBoundary(eventValue, offset).getTime() : new Date(eventValue).getTime();
+  return Math.round((value - start) / 60_000);
+}
+
+// Eventos ocupados do Google Agenda no formato de slots do site: [{ timeSlot, totalDuration }].
+export async function getCalendarBusySlots(dateKey, config = getCalendarConfig()) {
+  const events = await listBusyEvents({
+    timeMin: dayBoundary(dateKey, config.timeZoneOffset).toISOString(),
+    timeMax: dayBoundary(nextDateKey(dateKey), config.timeZoneOffset).toISOString(),
+  }, config);
+  const dayEnd = 24 * 60;
+  return events.map((event) => {
+    const start = Math.max(0, eventMinutes(event.start, dateKey, config.timeZoneOffset));
+    const end = Math.min(dayEnd, eventMinutes(event.end, dateKey, config.timeZoneOffset));
+    return { timeSlot: start, totalDuration: Math.max(1, end - start) };
+  }).filter((slot) => slot.timeSlot < dayEnd && slot.totalDuration > 0);
+}

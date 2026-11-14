@@ -30,15 +30,19 @@ function safeCalendarError(error) {
     .slice(0, 240);
 }
 
-export async function createBooking(body, res) {
-  if (!validBookingBody(body)) return sendJson(res, 400, { error: 'Dados de agendamento inválidos.' });
+function result(status, payload) {
+  return { status, payload };
+}
+
+export async function createBookingRecord(body) {
+  if (!validBookingBody(body)) return result(400, { error: 'Dados de agendamento inválidos.' });
 
   const supabase = getAdminClient();
-  if (!supabase) return sendJson(res, 503, { error: 'Servidor de reservas não configurado.' });
+  if (!supabase) return result(503, { error: 'Servidor de reservas não configurado.' });
 
   const config = getCalendarConfig();
   if (config.required && !isCalendarConfigured(config)) {
-    return sendJson(res, 503, { error: 'Agenda automática ainda não foi configurada no servidor.', required: true });
+    return result(503, { error: 'Agenda automática ainda não foi configurada no servidor.', required: true });
   }
 
   const bookingId = crypto.randomUUID();
@@ -61,11 +65,11 @@ export async function createBooking(body, res) {
 
   if (rpc.error) {
     const status = rpc.error.code === '23P01' ? 409 : 400;
-    return sendJson(res, status, { error: rpc.error.message || 'Não foi possível reservar este horário.' });
+    return result(status, { error: rpc.error.message || 'Não foi possível reservar este horário.' });
   }
 
   const rowResult = await supabase.from('bookings').select('*').eq('id', bookingId).limit(1).maybeSingle();
-  if (rowResult.error || !rowResult.data) return sendJson(res, 500, { error: 'Reserva criada, mas não foi possível carregar o resultado.' });
+  if (rowResult.error || !rowResult.data) return result(500, { error: 'Reserva criada, mas não foi possível carregar o resultado.' });
 
   // Cadastro pelo WhatsApp: preserva dados já registrados pela equipe.
   const digits = String(body.client.phone).replace(/\D/g, '');
@@ -93,7 +97,7 @@ export async function createBooking(body, res) {
         calendar_synced_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).eq('id', bookingId).select('*').limit(1).maybeSingle();
-      if (updated.error || !updated.data) return sendJson(res, 500, { error: 'Reserva criada, mas não foi possível registrar a sincronização.' });
+      if (updated.error || !updated.data) return result(500, { error: 'Reserva criada, mas não foi possível registrar a sincronização.' });
       row = updated.data;
     } catch (error) {
       const message = safeCalendarError(error);
@@ -107,17 +111,22 @@ export async function createBooking(body, res) {
           status: 'cancelled',
           updated_at: new Date().toISOString(),
         }).eq('id', bookingId);
-        return sendJson(res, 503, { error: 'Não foi possível confirmar o horário no Google Calendar.' });
+        return result(503, { error: 'Não foi possível confirmar o horário no Google Calendar.' });
       }
     }
   }
 
   const booking = publicBookingFromRow(row);
-  return sendJson(res, 201, {
+  return result(201, {
     booking,
     calendarSyncStatus: booking.calendarSyncStatus,
     calendarConfigured: isCalendarConfigured(config),
   });
+}
+
+export async function createBooking(body, res) {
+  const { status, payload } = await createBookingRecord(body);
+  return sendJson(res, status, payload);
 }
 
 export default async function handler(req, res) {

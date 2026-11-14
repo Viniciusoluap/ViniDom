@@ -12,6 +12,7 @@
     "aiox:reliability": "node scripts/aiox-reliability-check.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@emailjs/browser": "^4.4.1",
     "@supabase/supabase-js": "^2.105.1",
     "date-fns": "^4.1.0",

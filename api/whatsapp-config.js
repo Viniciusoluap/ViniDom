@@ -30,7 +30,15 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     const official = await readSetting(supabase, 'whatsapp_official');
     const web = await readSetting(supabase, 'whatsapp_web');
+    const agent = (await readSetting(supabase, 'agent')) || {};
+    const apiKey = process.env.ANTHROPIC_API_KEY || agent.apiKey || '';
     return sendJson(res, 200, {
+      agent: {
+        enabled: agent.enabled ?? true,
+        followups: agent.followups ?? true,
+        hasApiKey: Boolean(apiKey),
+        apiKeyPreview: maskToken(apiKey),
+      },
       official: {
         configured: Boolean(official?.accessToken && official?.phoneNumberId),
         phoneNumberId: official?.phoneNumberId || '',
@@ -60,6 +68,20 @@ export default async function handler(req, res) {
     const apiVersion = String(body?.apiVersion || 'v18.0').trim();
     if (!accessToken || !phoneNumberId) return sendJson(res, 400, { error: 'Informe o token e o Phone Number ID.' });
     await writeSetting(supabase, 'whatsapp_official', { accessToken, phoneNumberId, apiVersion });
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (channel === 'agent') {
+    const current = (await readSetting(supabase, 'agent')) || {};
+    const next = { ...current };
+    if (typeof body?.enabled === 'boolean') next.enabled = body.enabled;
+    if (typeof body?.followups === 'boolean') next.followups = body.followups;
+    if (body?.apiKey !== undefined) {
+      const apiKey = String(body.apiKey || '').trim();
+      if (apiKey && !/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(apiKey)) return sendJson(res, 400, { error: 'Chave da API do Claude inválida.' });
+      next.apiKey = apiKey;
+    }
+    await writeSetting(supabase, 'agent', next);
     return sendJson(res, 200, { ok: true });
   }
 

@@ -16,6 +16,11 @@ sempre ligado, como o [Railway](https://railway.app).
 | `SERVICE_SECRET` | Sim | Segredo compartilhado. O painel do ViniDom envia esse valor no cabeçalho `Authorization: Bearer <valor>` em toda chamada. Gere um valor longo e aleatório. |
 | `AUTH_DIR` | Não (padrão `./auth`) | Pasta onde a sessão do WhatsApp Web é salva. **Precisa apontar para um Volume persistente no Railway**, senão a sessão se perde a cada deploy/restart e será necessário escanear o QR Code de novo. |
 | `PORT` | Não | Definida automaticamente pelo Railway. |
+| `AGENT_WEBHOOK_URL` | Não (padrão `https://vcvisagismo.com/api/agent-inbound`) | Para onde cada mensagem recebida é enviada. O agente do ViniDom devolve a resposta, que o serviço envia ao cliente. |
+
+## Atendimento automático
+
+Toda mensagem recebida em conversa individual (grupos são ignorados) é repassada ao agente do ViniDom depois de 5 segundos sem novas mensagens, para juntar mensagens picadas. Se alguém responder pelo celular, o serviço avisa o ViniDom e o agente fica 12 horas fora daquela conversa. As mensagens enviadas pelo próprio serviço são reconhecidas pelo ID e não contam como resposta humana.
 
 ## Deploy no Railway
 
