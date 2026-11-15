@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Check, X, RefreshCw, Send, Users, Wifi, WifiOff, Search, Smartphone, QrCode, Save, LogOut, Bot } from 'lucide-react';
+import { Pencil, Check, X, RefreshCw, Send, Users, Wifi, WifiOff, Search, Smartphone, QrCode, Save, LogOut, Bot, MessagesSquare, ShieldCheck, Megaphone, FileText, Cake, UserCheck } from 'lucide-react';
 import { formatDateLong } from '../utils/dateFormatter';
 import { supabase } from '../lib/supabase';
+import WhatsAppConversations from './WhatsAppConversations';
 
 const STORAGE_KEY = 'vcvisagismo_wa_templates';
 
@@ -70,7 +71,20 @@ function buildClientMap(bookings) {
 
 const daysSince = (date) => Math.floor((new Date() - new Date(date)) / 86400000);
 
+const SUB_TABS = [
+  { id: 'conversas',     label: 'Conversas',          icon: MessagesSquare },
+  { id: 'atendimento',   label: 'Atendimento automático', icon: Bot },
+  { id: 'api',           label: 'API Oficial',        icon: ShieldCheck },
+  { id: 'web',           label: 'WhatsApp Web',       icon: Smartphone },
+  { id: 'disparo',       label: 'Disparo em massa',   icon: Megaphone },
+  { id: 'templates',     label: 'Templates',          icon: FileText },
+  { id: 'aniversarios',  label: 'Aniversariantes',    icon: Cake },
+  { id: 'followup',      label: 'Follow-up',          icon: UserCheck },
+];
+
 export default function WhatsAppHub({ bookings }) {
+  const [subTab, setSubTab] = useState('conversas');
+
   /* ── Templates ── */
   const [templates, setTemplates] = useState(loadTemplates);
   const [editingId, setEditingId] = useState(null);
@@ -372,7 +386,37 @@ export default function WhatsAppHub({ bookings }) {
         <MiniStat label="Falhas" value={sentFail} accent={sentFail > 0} />
       </div>
 
+      {/* ── Sub-abas ── */}
+      <div className="flex gap-1 border-b border-brand-100 overflow-x-auto -mt-2">
+        {SUB_TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setSubTab(id)}
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-semibold tracking-widest uppercase transition-colors border-b-2 -mb-px whitespace-nowrap shrink-0 ${
+              subTab === id
+                ? 'text-brand-900 border-brand-900'
+                : 'text-brand-400 border-transparent hover:text-brand-900 hover:border-brand-200'
+            }`}
+          >
+            <Icon size={13} />
+            {label}
+            {id === 'aniversarios' && birthdayToday.length > 0 && (
+              <span className="ml-1 bg-gold-500 text-white text-[10px] font-bold px-1.5 rounded-full">{birthdayToday.length}</span>
+            )}
+            {id === 'followup' && followUp.length > 0 && (
+              <span className="ml-1 bg-gold-500 text-white text-[10px] font-bold px-1.5 rounded-full">{followUp.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'conversas' && (
+        <WhatsAppConversations connected={web.configured && webConn.status === 'connected'} />
+      )}
+
       {/* ── Atendimento automático (agente) ── */}
+      {subTab === 'atendimento' && (
       <section>
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest">
@@ -448,8 +492,10 @@ export default function WhatsAppHub({ bookings }) {
           {agentMsg && <p className="text-xs text-brand-500">{agentMsg}</p>}
         </div>
       </section>
+      )}
 
       {/* ── Conexão: API Oficial ── */}
+      {subTab === 'api' && (
       <section>
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest">
@@ -506,8 +552,10 @@ export default function WhatsAppHub({ bookings }) {
           </div>
         </div>
       </section>
+      )}
 
       {/* ── Conexão: WhatsApp Web ── */}
+      {subTab === 'web' && (
       <section>
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest">
@@ -602,8 +650,10 @@ export default function WhatsAppHub({ bookings }) {
           </div>
         </div>
       </section>
+      )}
 
       {/* ── Disparo em Massa ── */}
+      {subTab === 'disparo' && (
       <section>
         <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-4">
           Disparo em Massa
@@ -761,8 +811,10 @@ export default function WhatsAppHub({ bookings }) {
           </div>
         )}
       </section>
+      )}
 
       {/* ── Templates de Mensagem ── */}
+      {subTab === 'templates' && (
       <section>
         <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-4">
           Templates de Mensagem
@@ -816,8 +868,10 @@ export default function WhatsAppHub({ bookings }) {
           ))}
         </div>
       </section>
+      )}
 
       {/* ── Aniversariantes de Hoje ── */}
+      {subTab === 'aniversarios' && (
       <section>
         <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-1">
           🎂 Aniversariantes de Hoje
@@ -864,8 +918,10 @@ export default function WhatsAppHub({ bookings }) {
           </div>
         )}
       </section>
+      )}
 
       {/* ── Follow-up ── */}
+      {subTab === 'followup' && (
       <section>
         <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-1">
           Follow-up — Clientes para Contatar
@@ -922,6 +978,7 @@ export default function WhatsAppHub({ bookings }) {
           </div>
         )}
       </section>
+      )}
     </div>
   );
 }
