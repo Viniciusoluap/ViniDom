@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Check, X, RefreshCw, Send, Users, Wifi, WifiOff, Search, Smartphone, QrCode, Save, LogOut } from 'lucide-react';
+import { Pencil, Check, X, RefreshCw, Send, Users, Wifi, WifiOff, Search, Smartphone, QrCode, Save, LogOut, Bot } from 'lucide-react';
 import { formatDateLong } from '../utils/dateFormatter';
 import { supabase } from '../lib/supabase';
 
@@ -89,6 +89,12 @@ export default function WhatsAppHub({ bookings }) {
   const [officialSaving, setOfficialSaving] = useState(false);
   const [officialMsg, setOfficialMsg] = useState('');
 
+  const [agent, setAgent] = useState({ enabled: true, followups: true, hasApiKey: false, apiKeyPreview: '' });
+  const [agentKey, setAgentKey] = useState('');
+  const [agentEditingKey, setAgentEditingKey] = useState(false);
+  const [agentSaving, setAgentSaving] = useState(false);
+  const [agentMsg, setAgentMsg] = useState('');
+
   const [webForm, setWebForm] = useState({ serviceUrl: '', serviceSecret: '' });
   const [webSaving, setWebSaving] = useState(false);
   const [webMsg, setWebMsg] = useState('');
@@ -129,6 +135,7 @@ export default function WhatsAppHub({ bookings }) {
       if (ok) {
         setOfficial(data.official);
         setWeb(data.web);
+        if (data.agent) setAgent(data.agent);
       }
     } catch {
       /* mantém estado anterior se a checagem falhar */
@@ -209,6 +216,25 @@ export default function WhatsAppHub({ bookings }) {
       setWebMsg(err.message);
     } finally {
       setWebSaving(false);
+    }
+  };
+
+  const saveAgent = async (patch, successMsg) => {
+    setAgentSaving(true);
+    setAgentMsg('');
+    try {
+      const { ok, data } = await authFetch('/api/whatsapp-config', {
+        method: 'POST',
+        body: JSON.stringify({ channel: 'agent', ...patch }),
+      });
+      if (!ok) throw new Error(data.error || 'Falha ao salvar.');
+      if (patch.apiKey !== undefined) { setAgentKey(''); setAgentEditingKey(false); }
+      setAgentMsg(successMsg);
+      await loadConfig();
+    } catch (err) {
+      setAgentMsg(err.message);
+    } finally {
+      setAgentSaving(false);
     }
   };
 
@@ -345,6 +371,83 @@ export default function WhatsAppHub({ bookings }) {
         />
         <MiniStat label="Falhas" value={sentFail} accent={sentFail > 0} />
       </div>
+
+      {/* ── Atendimento automático (agente) ── */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest">
+            Atendimento automático
+          </h2>
+          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 ${agent.hasApiKey && agent.enabled ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+            <Bot size={10} />
+            {configLoading ? 'Verificando...' : !agent.hasApiKey ? 'Falta a chave da IA' : agent.enabled ? 'Ativo' : 'Desligado'}
+          </span>
+        </div>
+
+        <div className="bg-white border border-brand-100 p-5 space-y-4">
+          <p className="text-xs text-brand-500 leading-relaxed">
+            Responde os clientes no WhatsApp Web: mostra horários, agenda, remarca, cancela e confirma presença.
+            Pagamento sempre no salão. Quando você responde uma conversa pelo celular, o agente sai dela por 12 horas.
+          </p>
+
+          {web.configured && webConn.status !== 'connected' && (
+            <p className="text-xs text-amber-700">Conecte o WhatsApp Web (seção abaixo) para o agente começar a atender.</p>
+          )}
+
+          {agent.hasApiKey && !agentEditingKey ? (
+            <p className="text-xs text-brand-500">
+              Chave da IA: <code className="bg-warm-50 px-1">{agent.apiKeyPreview}</code>{' '}
+              <button type="button" onClick={() => setAgentEditingKey(true)} className="underline hover:text-brand-900">trocar</button>
+            </p>
+          ) : (
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+              <div className="flex-1">
+                <p className="text-[10px] font-semibold text-brand-400 uppercase tracking-widest mb-1.5">Chave da API do Claude</p>
+                <input
+                  type="password"
+                  value={agentKey}
+                  onChange={e => setAgentKey(e.target.value)}
+                  placeholder="sk-ant-..."
+                  autoComplete="off"
+                  className="input-field text-sm"
+                />
+              </div>
+              <button
+                onClick={() => saveAgent({ apiKey: agentKey.trim() }, 'Chave salva. O agente já está atendendo.')}
+                disabled={agentSaving || !agentKey.trim()}
+                className="btn-primary text-xs flex items-center gap-1.5 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Save size={13} /> {agentSaving ? 'Salvando...' : 'Salvar chave'}
+              </button>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm text-brand-900 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agent.enabled}
+                disabled={agentSaving}
+                onChange={e => saveAgent({ enabled: e.target.checked }, e.target.checked ? 'Atendimento automático ligado.' : 'Atendimento automático desligado.')}
+                className="w-4 h-4 accent-brand-900"
+              />
+              Responder clientes automaticamente
+            </label>
+            <label className="flex items-center gap-2 text-sm text-brand-900 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agent.followups}
+                disabled={agentSaving}
+                onChange={e => saveAgent({ followups: e.target.checked }, e.target.checked ? 'Mensagens automáticas ligadas.' : 'Mensagens automáticas desligadas.')}
+                className="w-4 h-4 accent-brand-900"
+              />
+              Mensagens automáticas: confirmação na véspera, pós-atendimento, retorno após 21 dias e aniversário
+            </label>
+          </div>
+
+          {agentMsg && <p className="text-xs text-brand-500">{agentMsg}</p>}
+        </div>
+      </section>
 
       {/* ── Conexão: API Oficial ── */}
       <section>

@@ -1,4 +1,6 @@
 import { getAdminClient, requireAdmin, sendJson, parseBody } from '../src/server/supabaseServer.js';
+import { normalizePhoneDigits } from '../src/server/agentUtils.js';
+import { logAgentMessage } from './_whatsapp.js';
 
 const MAX_RECIPIENTS = 50;
 const MAX_MESSAGE_LENGTH = 4096;
@@ -92,7 +94,14 @@ export default async function handler(req, res) {
     }).catch(() => null);
 
     if (!result || !result.ok) return sendJson(res, 502, { error: 'Falha ao comunicar com o serviço do WhatsApp Web.' });
-    return sendJson(res, 200, { results: result.data.results || [] });
+    const results = result.data.results || [];
+    for (const [index, recipient] of recipients.entries()) {
+      const phoneDigits = normalizePhoneDigits(recipient.phone);
+      if (results[index]?.ok && phoneDigits) {
+        await logAgentMessage(supabase, { phoneDigits, role: 'assistant', content: recipient.message });
+      }
+    }
+    return sendJson(res, 200, { results });
   }
 
   return sendJson(res, 400, { error: 'Ação inválida.' });
