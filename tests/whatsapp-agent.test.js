@@ -118,15 +118,15 @@ test('loop do agente chama a ferramenta e devolve resposta curta formatada', asy
     { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't1', name: 'ver_horarios', input: { data: day, servicos: [1] } }] },
     { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Tenho **10:00**, 10:30 ou 11:00. Qual prefere?' }] },
   ];
-  const anthropic = { beta: { messages: { create: async (params) => { calls.push(structuredClone(params)); return responses.shift(); } } } };
+  const anthropic = { messages: { create: async (params) => { calls.push(structuredClone(params)); return responses.shift(); } } };
   const supabase = fakeSupabase({ clients: [{ name: 'João Silva' }] });
 
   const reply = await runAgent({ anthropic, supabase, chatJid: '5599981392210@s.whatsapp.net', phoneDigits: '99981392210', text: 'Quero cortar amanhã', now: NOW });
 
   assert.equal(reply, 'Tenho *10:00*, 10:30 ou 11:00. Qual prefere?');
-  assert.equal(calls[0].model, 'claude-opus-5-5');
-  assert.equal(calls[0].fallbacks, 'default');
-  assert.deepEqual(calls[0].output_config, { effort: 'low' });
+  assert.equal(calls[0].model, 'claude-haiku-5-5');
+  assert.equal(calls[0].fallbacks, undefined, 'Haiku 5.5 não tem fallback de servidor');
+  assert.deepEqual(calls[0].output_config, { effort: 'medium' });
   assert.match(calls[0].messages.at(-1).content, /João Silva \(cadastrado\)[\s\S]*Quero cortar amanhã/);
   const toolResult = calls[1].messages.at(-1).content[0];
   assert.equal(toolResult.tool_use_id, 't1');
