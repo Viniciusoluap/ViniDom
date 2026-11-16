@@ -2,6 +2,7 @@ import express from 'express';
 import qrcode from 'qrcode';
 import pino from 'pino';
 import fs from 'node:fs';
+import path from 'node:path';
 import {
   default as makeWASocket,
   useMultiFileAuthState,
@@ -25,6 +26,39 @@ const silentLogger = pino({ level: 'silent' });
 if (!SERVICE_SECRET) {
   console.error('SERVICE_SECRET não definido. Configure essa variável de ambiente antes de iniciar o serviço.');
   process.exit(1);
+}
+
+// Um erro inesperado não pode derrubar o serviço: registra e segue atendendo.
+process.on('unhandledRejection', (err) => console.error('[whatsapp-web] Erro não tratado:', err?.message || err));
+process.on('uncaughtException', (err) => console.error('[whatsapp-web] Exceção não tratada:', err?.message || err));
+
+// Apaga a sessão salva. A pasta em si é o ponto de montagem do Volume e não pode ser removida: só o conteúdo sai.
+function clearAuth() {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(AUTH_DIR);
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    try {
+      fs.rmSync(path.join(AUTH_DIR, entry), { recursive: true, force: true });
+    } catch (err) {
+      console.error('[whatsapp-web] Falha ao apagar', entry, err.message);
+    }
+  }
+}
+
+let connectAttempt = 0;
+function scheduleConnect(delayMs) {
+  const attempt = connectAttempt;
+  setTimeout(() => {
+    if (attempt !== connectAttempt) return; // outra conexão já foi iniciada
+    connectToWhatsApp().catch((err) => {
+      console.error('[whatsapp-web] Falha ao conectar:', err?.message || err);
+      scheduleConnect(10_000);
+    });
+  }, delayMs);
 }
 
 let sock = null;
@@ -200,6 +234,8 @@ function randomDelay() {
 }
 
 async function connectToWhatsApp() {
+  connectAttempt += 1;
+  const attempt = connectAttempt;
   fs.mkdirSync(AUTH_DIR, { recursive: true });
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
@@ -224,6 +260,7 @@ async function connectToWhatsApp() {
   });
 
   sock.ev.on('connection.update', (update) => {
+    if (attempt !== connectAttempt) return; // conexão antiga, já substituída
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
@@ -243,17 +280,16 @@ async function connectToWhatsApp() {
       const loggedOut = statusCode === DisconnectReason.loggedOut;
       connectionState = 'disconnected';
       connectedPhone = null;
-      console.log('[whatsapp-web] Conexão encerrada. Logout definitivo?', loggedOut);
-      if (!loggedOut) {
-        setTimeout(() => { connectToWhatsApp().catch((err) => console.error('[whatsapp-web] Falha ao reconectar:', err)); }, 3000);
-      } else {
-        latestQr = null;
-      }
+      latestQr = null;
+      console.log('[whatsapp-web] Conexão encerrada. Código:', statusCode, 'Logout definitivo?', loggedOut);
+      // Sessão encerrada pelo WhatsApp: apaga a sessão antiga e volta a oferecer um QR Code novo.
+      if (loggedOut) clearAuth();
+      scheduleConnect(3000);
     }
   });
 }
 
-connectToWhatsApp().catch((err) => console.error('[whatsapp-web] Falha ao iniciar conexão:', err));
+scheduleConnect(0);
 
 const app = express();
 app.use(express.json());
@@ -282,17 +318,25 @@ app.get('/qr', async (req, res) => {
 });
 
 app.post('/disconnect', async (req, res) => {
+  connectAttempt += 1; // invalida a conexão atual: o fechamento dela não agenda nova tentativa
+  const current = sock;
+  sock = null;
   try {
-    if (sock) await sock.logout();
+    if (current) await Promise.race([current.logout(), sleep(5000)]);
   } catch {
     // ignora erro de logout — a sessão pode já estar encerrada
   }
-  fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+  try {
+    current?.end?.(undefined);
+  } catch {
+    // conexão já fechada
+  }
+  clearAuth();
   latestQr = null;
-  connectionState = 'disconnected';
+  connectionState = 'connecting';
   connectedPhone = null;
   res.json({ ok: true });
-  connectToWhatsApp().catch((err) => console.error('[whatsapp-web] Falha ao reiniciar conexão:', err));
+  scheduleConnect(500);
 });
 
 app.post('/send-bulk', async (req, res) => {
