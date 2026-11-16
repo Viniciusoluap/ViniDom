@@ -172,7 +172,12 @@ test('cadastrar_cliente confirma nome do perfil mas não sobrescreve cadastro co
 test('contexto avisa a Vicky para perguntar o nome quando ainda não foi confirmado', async () => {
   const doPerfil = fakeSupabase({ clients: [{ name: 'Aninha', notes: PROFILE_NAME_NOTE }] });
   const ctx = await buildContext(doPerfil, { phoneDigits: '99988887777', pushName: 'Aninha', now: NOW });
-  assert.match(ctx.text, /Aninha \(nome do perfil do WhatsApp, ainda não confirmado: pergunte o nome\)/);
+  assert.match(ctx.text, /Aninha \(nome do perfil do WhatsApp: use esse nome, não pergunte\)/);
+
+  const semNome = await buildContext(fakeSupabase({}), { phoneDigits: '99981392210', pushName: '🔥🔥', now: NOW });
+  assert.match(semNome.text, /sem nome no cadastro nem no perfil do WhatsApp: pergunte só o nome/);
+  const soPerfil = await buildContext(fakeSupabase({}), { phoneDigits: '99981392210', pushName: 'Carlos ✂️', now: NOW });
+  assert.match(soPerfil.text, /Carlos \(nome do perfil do WhatsApp: use esse nome, não pergunte\)/);
 
   const confirmado = fakeSupabase({ clients: [{ name: 'Vinicius Freitas', notes: null }] });
   const ok = await buildContext(confirmado, { phoneDigits: '99981392210', now: NOW });

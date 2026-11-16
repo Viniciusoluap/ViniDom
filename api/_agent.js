@@ -40,7 +40,7 @@ export async function ensureClientRegistered(supabase, { phoneDigits, pushName }
 export async function saveClientName(supabase, { phoneDigits, name }) {
   const clean = cleanPersonName(name);
   if (!phoneDigits) return 'Não identifiquei o WhatsApp deste cliente; não foi possível cadastrar.';
-  if (!clean) return 'Nome inválido. Peça o nome completo do cliente.';
+  if (!clean) return 'Nome inválido. Pergunte de novo o nome do cliente.';
   const { data: existing } = await supabase.from('clients').select('name, notes').eq('phone_digits', phoneDigits).maybeSingle();
   if (!existing) {
     const { error } = await supabase.from('clients').insert({ phone_digits: phoneDigits, phone: maskPhone(phoneDigits), name: clean });
@@ -80,7 +80,7 @@ Regras:
 - Nunca invente horário: use ver_horarios antes de oferecer e ofereça no máximo 3 opções.
 - Antes de agendar, confirme serviço, dia e hora numa frase curta; só chame agendar depois que o cliente concordar.
 - Para remarcar: agende o novo horário e depois cancele o antigo.
-- Todo cliente precisa estar cadastrado com nome e WhatsApp. Se o contexto disser que o cliente não tem cadastro ou que o nome não foi confirmado, pergunte o nome dele já na primeira resposta e, quando ele informar, use cadastrar_cliente. Se o nome já estiver confirmado, use-o e não pergunte de novo.
+- Nome do cliente: use o nome que vem no contexto (do cadastro ou do perfil do WhatsApp) e não pergunte. Só pergunte quando o contexto disser que não há nome; nesse caso pergunte apenas "Qual é o seu nome?", nunca peça nome completo nem sobrenome, e use cadastrar_cliente com o que ele responder. Se o cliente disser por conta própria que o nome é outro, use cadastrar_cliente para corrigir.
 - Se o cliente responder SIM a um pedido de confirmação, use confirmar_presenca. Se responder NÃO, pergunte se quer remarcar ou cancelar.
 - Endereço exato, reclamações, pedidos especiais, dúvidas que você não sabe responder ou pedido para falar com o Vinicius: use chamar_vinicius e avise que ele responde em breve.
 - Você não ouve áudios nem vê imagens ou vídeos. Se o cliente mandar áudio, diga que não ouve áudios por aqui e peça para escrever. Se mandar só imagem, vídeo ou arquivo, pergunte em que pode ajudar.
@@ -109,7 +109,7 @@ export const TOOLS = [
       data: { type: 'string', description: 'Dia no formato AAAA-MM-DD.' },
       horario: { type: 'string', description: 'Hora de início no formato HH:MM, igual a uma das opções de ver_horarios.' },
       servicos: { type: 'array', items: { type: 'integer', enum: SERVICE_IDS } },
-      nome: { type: 'string', description: 'Nome completo do cliente.' },
+      nome: { type: 'string', description: 'Nome do cliente, como está no contexto ou como ele informou.' },
     }, ['data', 'horario', 'servicos', 'nome']),
   },
   {
@@ -126,9 +126,9 @@ export const TOOLS = [
   },
   {
     name: 'cadastrar_cliente',
-    description: 'Cadastra o cliente desta conversa (o WhatsApp é preenchido automaticamente) ou confirma o nome dele. Use assim que o cliente informar o nome.',
+    description: 'Cadastra o cliente desta conversa (o WhatsApp é preenchido automaticamente) ou corrige o nome dele. Use quando o cliente informar o nome.',
     strict: true,
-    input_schema: strictObject({ nome: { type: 'string', description: 'Nome completo informado pelo cliente.' } }, ['nome']),
+    input_schema: strictObject({ nome: { type: 'string', description: 'Nome informado pelo cliente.' } }, ['nome']),
   },
   {
     name: 'chamar_vinicius',
@@ -320,8 +320,10 @@ export async function buildContext(supabase, { phoneDigits, pushName, now = Date
     `Agora: ${weekdayName(local.dateKey)} ${local.dateKey} ${minutesToHHMM(local.minutes)}`,
     `Próximos dias abertos: ${openDays.join(', ')}`,
     `Cliente: ${clientName
-      ? (nameConfirmed ? `${clientName} (cadastrado)` : `${clientName} (nome do perfil do WhatsApp, ainda não confirmado: pergunte o nome)`)
-      : `sem cadastro (nome no perfil do WhatsApp: ${pushName || 'desconhecido'}): pergunte o nome`}`,
+      ? (nameConfirmed ? `${clientName} (cadastrado)` : `${clientName} (nome do perfil do WhatsApp: use esse nome, não pergunte)`)
+      : (cleanPersonName(pushName)
+        ? `${cleanPersonName(pushName)} (nome do perfil do WhatsApp: use esse nome, não pergunte)`
+        : 'sem nome no cadastro nem no perfil do WhatsApp: pergunte só o nome')}`,
     `WhatsApp: ${phoneDigits ? maskPhone(phoneDigits) : 'não identificado'}`,
     upcoming.length
       ? `Agendamentos futuros:\n${upcoming.map((row) => `- id ${row.id}: ${describeBooking(row)}${row.client_confirmed_at ? ' — presença confirmada' : ''}`).join('\n')}`
