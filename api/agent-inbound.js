@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getAdminClient, getBearerToken, parseBody, sendJson } from '../src/server/supabaseServer.js';
 import { normalizePhoneDigits } from '../src/server/agentUtils.js';
-import { runAgent } from './_agent.js';
+import { ensureClientRegistered, runAgent } from './_agent.js';
 import {
   getAgentSettings, getWebConfig, isChatPaused, logAgentMessage, pauseChat, secretMatches,
 } from './_whatsapp.js';
@@ -40,6 +40,9 @@ export default async function handler(req, res) {
   if (contactName) {
     await supabase.from('agent_chats').upsert({ chat_jid: chatJid, phone_digits: phoneDigits, contact_name: contactName, updated_at: new Date().toISOString() });
   }
+
+  // Todo número que conversa com a Vicky entra no cadastro de clientes.
+  await ensureClientRegistered(supabase, { phoneDigits, pushName: contactName });
 
   const settings = await getAgentSettings(supabase);
   const paused = await isChatPaused(supabase, { chatJid, phoneDigits });
