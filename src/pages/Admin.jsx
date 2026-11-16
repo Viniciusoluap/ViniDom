@@ -6,9 +6,11 @@ import StaffList from '../components/StaffList';
 import Reports from '../components/Reports';
 import WhatsAppHub from '../components/WhatsAppHub';
 import Contabilidade from '../components/Contabilidade';
-import { BarChart3, Calendar, Users, Briefcase, TrendingUp, Lock, X, MessageCircle, Calculator } from 'lucide-react';
+import { BarChart3, Calendar, Users, Briefcase, TrendingUp, X, MessageCircle, Calculator } from 'lucide-react';
 import { BUSINESS_HOURS, DAY_KEYS } from '../utils/constants';
+import { Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { homeForSession } from '../utils/authRoles';
 import { useBookings } from '../hooks/useBookings';
 import { useStaff } from '../hooks/useStaff';
 import { dateToKey, formatTime } from '../utils/dateFormatter';
@@ -16,9 +18,6 @@ import { dateToKey, formatTime } from '../utils/dateFormatter';
 export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authReady, setAuthReady] = useState(false);
-  const [email, setEmail]   = useState('');
-  const [pw, setPw]         = useState('');
-  const [error, setError]   = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const [showDailyConfirm, setShowDailyConfirm]       = useState(false);
@@ -47,10 +46,8 @@ export default function Admin() {
 
     let active = true;
     const applySession = (session) => {
-      const allowed = session?.user?.app_metadata?.role === 'admin';
-      if (session && !allowed) {
-        void supabase.auth.signOut();
-      }
+      // Quem não é admin volta para o acesso único, que leva cada perfil à sua área.
+      const allowed = homeForSession(session) === '/admin';
       if (active) {
         setAuthed(allowed);
         setAuthReady(true);
@@ -102,68 +99,13 @@ export default function Admin() {
     return () => clearInterval(id);
   }, [authed]);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError(false);
-    if (!supabase) {
-      setError(true);
-      return;
-    }
-
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password: pw,
-    });
-    if (authError) {
-      setError(true);
-      setPw('');
-    }
-  };
-
   if (!authReady) return (
     <div className="flex-1 flex items-center justify-center pt-24">
       <div className="w-6 h-6 border-2 border-brand-900 border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
-  if (!authed) {
-    return (
-      <div className="flex-1 flex items-center justify-center px-6 py-24 animate-fade-in">
-        <div className="w-full max-w-sm">
-          <div className="flex items-center justify-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-brand-900 flex items-center justify-center">
-              <Lock size={18} className="text-white" />
-            </div>
-            <div>
-              <p className="text-brand-900 font-semibold tracking-wide">Acesso Administrativo</p>
-              <p className="text-brand-400 text-xs tracking-widest uppercase mt-0.5">Vinicius Cavalcante</p>
-            </div>
-          </div>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(false); }}
-              placeholder="E-mail administrativo"
-              autoComplete="username"
-              autoFocus
-              className={`input-field ${error ? 'border-red-400 focus:border-red-400' : ''}`}
-            />
-            <input
-              type="password"
-              value={pw}
-              onChange={(e) => { setPw(e.target.value); setError(false); }}
-              placeholder="Senha"
-              autoComplete="current-password"
-              className={`input-field ${error ? 'border-red-400 focus:border-red-400' : ''}`}
-            />
-            {error && <p className="text-red-500 text-xs tracking-wide -mt-2">E-mail ou senha incorretos, ou Supabase Auth não configurado.</p>}
-            <button type="submit" className="btn-primary w-full text-center">Entrar</button>
-          </form>
-        </div>
-      </div>
-    );
-  }
+  if (!authed) return <Navigate to="/entrar" replace />;
 
   const tabs = [
     { id: 'dashboard',     label: 'Dashboard',     icon: <BarChart3     size={14} /> },
