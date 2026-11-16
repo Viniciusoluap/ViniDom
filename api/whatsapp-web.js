@@ -98,7 +98,7 @@ export default async function handler(req, res) {
     for (const [index, recipient] of recipients.entries()) {
       const phoneDigits = normalizePhoneDigits(recipient.phone);
       if (results[index]?.ok && phoneDigits) {
-        await logAgentMessage(supabase, { phoneDigits, role: 'assistant', content: recipient.message });
+        await logAgentMessage(supabase, { phoneDigits, role: 'assistant', source: 'bulk', content: recipient.message });
       }
     }
     return sendJson(res, 200, { results });

@@ -69,7 +69,7 @@ export default async function handler(req, res) {
   for (const [index, item] of toSend.entries()) {
     if (results[index]?.ok) {
       sent += 1;
-      await logAgentMessage(supabase, { phoneDigits: item.phoneDigits, role: 'assistant', content: item.message });
+      await logAgentMessage(supabase, { phoneDigits: item.phoneDigits, role: 'assistant', source: 'auto', content: item.message });
     } else {
       // Libera para tentar de novo na próxima hora.
       await supabase.from('agent_outbound_log').delete().eq('kind', item.kind).eq('ref', item.ref);

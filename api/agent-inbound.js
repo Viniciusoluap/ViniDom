@@ -24,17 +24,22 @@ export default async function handler(req, res) {
   const body = parseBody(req) || {};
   const chatJid = String(body.jid || '').slice(0, 120);
   if (!chatJid) return sendJson(res, 400, { error: 'Conversa inválida.' });
-  const phoneDigits = normalizePhoneDigits(body.phone || chatJid);
+  const phoneDigits = normalizePhoneDigits(body.phone || (chatJid.endsWith('@s.whatsapp.net') ? chatJid : ''));
 
   // Alguém respondeu manualmente pelo celular: o agente sai da conversa por 12 horas.
   if (body.type === 'human_reply') {
     await pauseChat(supabase, { chatJid, phoneDigits });
-    if (body.text) await logAgentMessage(supabase, { chatJid, phoneDigits, role: 'assistant', content: body.text });
+    if (body.text) await logAgentMessage(supabase, { chatJid, phoneDigits, role: 'assistant', source: 'human', content: body.text });
     return sendJson(res, 200, { reply: null });
   }
 
   const text = String(body.text || '').trim().slice(0, 2000);
   if (!text) return sendJson(res, 200, { reply: null });
+
+  const contactName = String(body.name || '').trim().slice(0, 80);
+  if (contactName) {
+    await supabase.from('agent_chats').upsert({ chat_jid: chatJid, phone_digits: phoneDigits, contact_name: contactName, updated_at: new Date().toISOString() });
+  }
 
   const settings = await getAgentSettings(supabase);
   const paused = await isChatPaused(supabase, { chatJid, phoneDigits });
