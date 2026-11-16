@@ -1,10 +1,12 @@
 import { getAdminClient, parseBody, requireAdmin, sendJson } from '../src/server/supabaseServer.js';
 import { maskPhone, normalizePhoneDigits } from '../src/server/agentUtils.js';
 import { getWebConfig, logAgentMessage, pauseChat, sendViaService } from './_whatsapp.js';
+import { removeMedia, signMediaUrls } from './_media.js';
 
 const LIST_DAYS = 60;
 const THREAD_LIMIT = 300;
 const MAX_TEXT = 4000;
+const MAX_DELETE = 200;
 
 // Uma conversa é identificada pelo telefone (DDD + número) ou, sem telefone conhecido, pelo JID do WhatsApp.
 function parseKey(value) {
@@ -69,15 +71,32 @@ async function listChats(supabase) {
 
 async function loadThread(supabase, chat) {
   const { data, error } = await chatFilter(
-    supabase.from('agent_messages').select('id, role, source, content, created_at'), chat,
+    supabase.from('agent_messages').select('id, role, source, content, created_at, media_type, media_path, media_mime'), chat,
   ).order('created_at', { ascending: false }).limit(THREAD_LIMIT);
   if (error) throw new Error('Falha ao carregar a conversa.');
-  return (data || []).reverse().map((row) => ({
+  const rows = (data || []).reverse();
+  const urls = await signMediaUrls(supabase, rows.map((row) => row.media_path));
+  return rows.map((row) => ({
     id: row.id,
     source: row.source || (row.role === 'user' ? 'client' : 'agent'),
     content: row.content,
     createdAt: row.created_at,
+    media: row.media_type ? { type: row.media_type, mime: row.media_mime, url: urls.get(row.media_path) || null } : null,
   }));
+}
+
+// Apaga o histórico das conversas (mensagens e arquivos). O cadastro do cliente e os agendamentos ficam.
+async function deleteChats(supabase, chats) {
+  for (const chat of chats) {
+    const { data, error } = await chatFilter(supabase.from('agent_messages').select('media_path'), chat).not('media_path', 'is', null);
+    if (error) throw new Error('Falha ao localizar arquivos da conversa.');
+    await removeMedia(supabase, (data || []).map((row) => row.media_path));
+    const { error: deleteError } = await chatFilter(supabase.from('agent_messages').delete(), chat);
+    if (deleteError) throw new Error('Falha ao apagar a conversa.');
+    const filters = [`chat_jid.eq."${chat.chatJid.replace(/"/g, '')}"`];
+    if (chat.phoneDigits) filters.push(`phone_digits.eq.${chat.phoneDigits}`);
+    await supabase.from('agent_chats').delete().or(filters.join(','));
+  }
 }
 
 async function isPaused(supabase, chat) {
@@ -114,6 +133,15 @@ export default async function handler(req, res) {
     }
 
     const body = parseBody(req) || {};
+
+    if (body.action === 'delete') {
+      const keys = Array.isArray(body.keys) ? body.keys : [];
+      const chats = [...new Map(keys.map(parseKey).filter(Boolean).map((c) => [c.key, c])).values()];
+      if (!chats.length || chats.length > MAX_DELETE) return sendJson(res, 400, { error: 'Selecione de 1 a 200 conversas.' });
+      await deleteChats(supabase, chats);
+      return sendJson(res, 200, { deleted: chats.length });
+    }
+
     const chat = parseKey(body.key);
     if (!chat) return sendJson(res, 400, { error: 'Conversa inválida.' });
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Bot, Hand, RefreshCw, Search, Send } from 'lucide-react';
+import { ArrowLeft, Bot, FileText, Hand, RefreshCw, Search, Send, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const LIST_POLL_MS = 10000;
@@ -29,6 +29,47 @@ async function apiFetch(url, options = {}) {
   return { ok: response.ok, data };
 }
 
+// Os links dos arquivos mudam a cada atualização; mantém o anterior para a imagem não piscar.
+function keepMediaUrls(previous, next) {
+  const known = new Map(previous.filter((m) => m.media?.url).map((m) => [m.id, m.media.url]));
+  return next.map((m) => (m.media && known.has(m.id) ? { ...m, media: { ...m.media, url: known.get(m.id) } } : m));
+}
+
+function MediaBlock({ media }) {
+  if (!media.url) {
+    return <p className="text-xs italic opacity-70 mb-1">Arquivo não disponível no painel. Veja no celular.</p>;
+  }
+  if (media.type === 'image' || media.type === 'sticker') {
+    return (
+      <a href={media.url} target="_blank" rel="noreferrer" className="block mb-1">
+        <img src={media.url} alt="Imagem enviada" loading="lazy" className={`${media.type === 'sticker' ? 'w-28' : 'max-w-full max-h-72'} object-contain`} />
+      </a>
+    );
+  }
+  if (media.type === 'audio') {
+    return (
+      <div className="mb-1">
+        <audio controls preload="none" src={media.url} className="max-w-full w-64" />
+        <a href={media.url} target="_blank" rel="noreferrer" className="text-[10px] underline opacity-70">Abrir áudio</a>
+      </div>
+    );
+  }
+  if (media.type === 'video') {
+    return <video controls preload="metadata" src={media.url} className="max-w-full max-h-72 mb-1" />;
+  }
+  return (
+    <a href={media.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 underline mb-1">
+      <FileText size={14} /> Abrir arquivo
+    </a>
+  );
+}
+
+// O texto "[Imagem]" só existe para a lista e para a Vicky; no balão, a própria mídia já mostra isso.
+function visibleText(message) {
+  if (!message.media) return message.content;
+  return message.content.replace(/^\[[^\]]*\]\s?/, '');
+}
+
 function formatWhen(iso) {
   const date = new Date(iso);
   const sameDay = date.toDateString() === new Date().toDateString();
@@ -48,6 +89,9 @@ export default function WhatsAppConversations({ connected }) {
   const [paused, setPaused] = useState(false);
   const [threadError, setThreadError] = useState('');
   const [reloadToken, setReloadToken] = useState(0);
+
+  const [checked, setChecked] = useState(() => new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -79,7 +123,7 @@ export default function WhatsAppConversations({ connected }) {
       try {
         const { ok, data } = await apiFetch(`/api/whatsapp-conversations?key=${encodeURIComponent(selectedKey)}`);
         if (!active) return;
-        if (ok) { setMessages(data.messages || []); setPaused(Boolean(data.paused)); setThreadError(''); }
+        if (ok) { setMessages((prev) => keepMediaUrls(prev, data.messages || [])); setPaused(Boolean(data.paused)); setThreadError(''); }
         else setThreadError(data.error || 'Não foi possível carregar a conversa.');
       } catch (err) {
         if (active) setThreadError(err.message);
@@ -129,6 +173,46 @@ export default function WhatsAppConversations({ connected }) {
     }
   };
 
+  const toggleChecked = (key) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const visibleKeys = filtered.map((chat) => chat.key);
+  const selectedCount = visibleKeys.filter((key) => checked.has(key)).length;
+  const allChecked = visibleKeys.length > 0 && selectedCount === visibleKeys.length;
+
+  const toggleAll = () => {
+    setChecked(allChecked ? new Set() : new Set(visibleKeys));
+  };
+
+  const deleteKeys = async (keys) => {
+    if (!keys.length || deleting) return;
+    const label = keys.length === 1 ? 'esta conversa' : `${keys.length} conversas`;
+    if (!window.confirm(`Excluir ${label}? O histórico de mensagens e arquivos será apagado. O cadastro do cliente e os agendamentos continuam.`)) return;
+    setDeleting(true);
+    setListError('');
+    try {
+      const { ok, data } = await apiFetch('/api/whatsapp-conversations', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'delete', keys }),
+      });
+      if (!ok) throw new Error(data.error || 'Não foi possível excluir.');
+      setChats((prev) => prev.filter((chat) => !keys.includes(chat.key)));
+      setChecked(new Set());
+      if (keys.includes(selectedKey)) setSelectedKey(null);
+      setReloadToken((n) => n + 1);
+    } catch (err) {
+      setListError(err.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const send = () => {
     if (!draft.trim() || busy) return;
     void act({ action: 'send', text: draft.trim() });
@@ -149,6 +233,22 @@ export default function WhatsAppConversations({ connected }) {
               className="input-field pl-8 text-sm py-2"
             />
           </div>
+          {filtered.length > 0 && (
+            <div className="flex items-center justify-between gap-2 mt-2">
+              <label className="flex items-center gap-2 text-xs text-brand-400 cursor-pointer select-none">
+                <input type="checkbox" checked={allChecked} onChange={toggleAll} className="w-4 h-4 accent-brand-900" />
+                {selectedCount ? `${selectedCount} selecionada${selectedCount > 1 ? 's' : ''}` : 'Selecionar todas'}
+              </label>
+              <button
+                type="button"
+                onClick={() => deleteKeys(visibleKeys.filter((key) => checked.has(key)))}
+                disabled={!selectedCount || deleting}
+                className="text-[11px] uppercase tracking-widest font-semibold text-red-600 hover:text-red-800 flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Trash2 size={12} /> {deleting ? 'Excluindo...' : 'Excluir'}
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto">
           {listLoading && <p className="text-center text-brand-300 text-sm py-8">Carregando conversas...</p>}
@@ -159,11 +259,23 @@ export default function WhatsAppConversations({ connected }) {
             </p>
           )}
           {filtered.map((chat) => (
-            <button
+            <div
               key={chat.key}
+              className={`flex items-start border-b border-brand-50 hover:bg-warm-50 transition-colors ${chat.key === selectedKey ? 'bg-warm-50' : ''}`}
+            >
+            <label className="pl-4 pr-1 py-3.5 cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                checked={checked.has(chat.key)}
+                onChange={() => toggleChecked(chat.key)}
+                aria-label={`Selecionar conversa com ${chat.name}`}
+                className="w-4 h-4 accent-brand-900"
+              />
+            </label>
+            <button
               type="button"
               onClick={() => openChat(chat.key)}
-              className={`w-full text-left px-4 py-3 border-b border-brand-50 hover:bg-warm-50 transition-colors ${chat.key === selectedKey ? 'bg-warm-50' : ''}`}
+              className="flex-1 min-w-0 text-left pl-2 pr-4 py-3"
             >
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-brand-900 truncate">{chat.name}</p>
@@ -177,6 +289,7 @@ export default function WhatsAppConversations({ connected }) {
                 </p>
               </div>
             </button>
+            </div>
           ))}
         </div>
       </div>
@@ -201,6 +314,16 @@ export default function WhatsAppConversations({ connected }) {
               </div>
               <button
                 type="button"
+                disabled={deleting}
+                onClick={() => deleteKeys([selected.key])}
+                title="Excluir conversa"
+                aria-label="Excluir conversa"
+                className="p-2 text-brand-300 hover:text-red-600 shrink-0 disabled:opacity-40"
+              >
+                <Trash2 size={14} />
+              </button>
+              <button
+                type="button"
                 disabled={busy}
                 onClick={() => act({ action: paused ? 'resume' : 'pause' })}
                 className="btn-secondary text-[11px] py-1.5 px-3 flex items-center gap-1.5 shrink-0 disabled:opacity-40"
@@ -221,7 +344,8 @@ export default function WhatsAppConversations({ connected }) {
                   <div key={message.id} className={`flex ${style.align}`}>
                     <div className={`max-w-[80%] px-3 py-2 text-sm whitespace-pre-wrap break-words ${style.bubble}`}>
                       {style.label && <p className="text-[10px] font-semibold uppercase tracking-widest opacity-70 mb-0.5">{style.label}</p>}
-                      {message.content}
+                      {message.media && <MediaBlock media={message.media} />}
+                      {visibleText(message)}
                       <p className="text-[10px] opacity-60 text-right mt-1">{formatWhen(message.createdAt)}</p>
                     </div>
                   </div>

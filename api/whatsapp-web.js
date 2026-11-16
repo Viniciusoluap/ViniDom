@@ -20,6 +20,7 @@ async function callService(config, path, options = {}) {
     },
   });
   if (!response.headers.get('content-type')?.includes('application/json')) {
+    if (response.status >= 500) return { ok: false, status: response.status };
     return { ok: false, status: response.status, error: 'wrong_service' };
   }
   const data = await response.json().catch(() => ({}));
@@ -27,10 +28,13 @@ async function callService(config, path, options = {}) {
 }
 
 function serviceError(result) {
-  if (!result) return 'Serviço do WhatsApp Web indisponível.';
+  if (!result) return 'Serviço do WhatsApp Web indisponível (sem resposta do Railway).';
   if (result.error === 'wrong_service') return 'Esta URL abre o site, não o serviço de WhatsApp Web. Configure o Railway para executar whatsapp-service.';
   if (result.status === 401) return 'O segredo do serviço não confere com o SERVICE_SECRET do Railway.';
-  return 'Não foi possível consultar o serviço do WhatsApp Web.';
+  if (result.status === 502 || result.status === 503) return `O Railway não conseguiu falar com o serviço (código ${result.status}). Ele pode estar reiniciando: aguarde 1 minuto e atualize.`;
+  if (result.status === 404) return 'O Railway não encontrou o serviço nesse endereço (código 404). Confira o domínio em Settings > Networking.';
+  console.error('[whatsapp-web] Resposta inesperada do serviço:', result.status, JSON.stringify(result.data || {}).slice(0, 300));
+  return `Não foi possível consultar o serviço do WhatsApp Web (código ${result.status}).`;
 }
 
 export default async function handler(req, res) {

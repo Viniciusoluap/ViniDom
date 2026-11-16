@@ -8,6 +8,7 @@ import {
   DisconnectReason,
   fetchLatestBaileysVersion,
   generateMessageIDV2,
+  downloadMediaMessage,
 } from '@whiskeysockets/baileys';
 
 const PORT = process.env.PORT || 3000;
@@ -18,6 +19,8 @@ const MAX_DELAY_MS = 6000;
 const AGENT_WEBHOOK_URL = process.env.AGENT_WEBHOOK_URL || 'https://vcvisagismo.com/api/agent-inbound';
 const DEBOUNCE_MS = 5000;
 const MAX_MESSAGE_AGE_S = 5 * 60;
+const MAX_MEDIA_BYTES = 3 * 1024 * 1024; // acima disso o painel mostra só o aviso (limite de envio para a Vercel)
+const silentLogger = pino({ level: 'silent' });
 
 if (!SERVICE_SECRET) {
   console.error('SERVICE_SECRET não definido. Configure essa variável de ambiente antes de iniciar o serviço.');
@@ -64,10 +67,47 @@ function extractText(message) {
   const text = m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption
     || m.buttonsResponseMessage?.selectedDisplayText || m.listResponseMessage?.title || m.templateButtonReplyMessage?.selectedDisplayText;
   if (text) return String(text);
-  if (m.audioMessage || m.imageMessage || m.videoMessage || m.stickerMessage || m.documentMessage || m.contactMessage || m.locationMessage) {
-    return '[mensagem sem texto: áudio, imagem ou arquivo]';
-  }
+  if (m.contactMessage || m.contactsArrayMessage) return '[contato compartilhado]';
+  if (m.locationMessage || m.liveLocationMessage) return '[localização compartilhada]';
   return null;
+}
+
+// Foto, áudio, vídeo, figurinha ou documento: o arquivo vai para o painel, e a Vicky só fica sabendo do tipo.
+function extractMedia(message) {
+  const m = unwrap(message);
+  const doc = m.documentMessage || m.documentWithCaptionMessage?.message?.documentMessage;
+  if (m.imageMessage) return { kind: 'image', node: m.imageMessage, caption: m.imageMessage.caption || '' };
+  if (m.videoMessage) return { kind: 'video', node: m.videoMessage, caption: m.videoMessage.caption || '' };
+  if (m.audioMessage) return { kind: 'audio', node: m.audioMessage, caption: '' };
+  if (m.stickerMessage) return { kind: 'sticker', node: m.stickerMessage, caption: '' };
+  if (doc) return { kind: 'document', node: doc, caption: doc.caption || '' };
+  return null;
+}
+
+function numberOf(value) {
+  return Number(value?.toNumber?.() ?? value?.low ?? value ?? 0);
+}
+
+async function forwardMedia(msg, media, { jid, phone, name, fromMe }) {
+  let data = null;
+  const declaredSize = numberOf(media.node.fileLength);
+  if (!declaredSize || declaredSize <= MAX_MEDIA_BYTES) {
+    try {
+      const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: silentLogger, reuploadRequest: sock.updateMediaMessage });
+      if (buffer.length <= MAX_MEDIA_BYTES) data = buffer.toString('base64');
+    } catch (err) {
+      console.error('[media] Falha ao baixar arquivo:', err.message);
+    }
+  }
+  await callAgent({
+    type: 'media',
+    jid,
+    phone,
+    name,
+    fromMe: Boolean(fromMe),
+    caption: media.caption,
+    media: { kind: media.kind, mime: media.node.mimetype || null, fileName: media.node.fileName || null, data },
+  });
 }
 
 function isPrivateChat(jid) {
@@ -104,7 +144,10 @@ async function flush(jid) {
   const entry = pending.get(jid);
   pending.delete(jid);
   if (!entry || !sock || connectionState !== 'connected') return;
-  const result = await callAgent({ type: 'message', jid, phone: entry.phone, name: entry.name, text: entry.texts.join('\n') });
+  const result = await callAgent({
+    type: 'message', jid, phone: entry.phone, name: entry.name,
+    text: entry.texts.join('\n'), captions: entry.captions, media: entry.media,
+  });
   const reply = String(result?.reply || '').trim();
   if (!reply) return;
   await sock.sendPresenceUpdate('composing', jid).catch(() => {});
@@ -120,19 +163,29 @@ function handleIncoming(msg, type) {
   const sentAt = typeof ts === 'object' && ts !== null ? Number(ts.toNumber?.() ?? ts.low ?? 0) : Number(ts || 0);
   const ageSeconds = Math.floor(Date.now() / 1000) - sentAt;
   if (ageSeconds > MAX_MESSAGE_AGE_S) return;
-  const text = extractText(msg.message);
-  if (text === null) return;
+  const media = extractMedia(msg.message);
+  const text = media ? null : extractText(msg.message);
+  if (!media && text === null) return;
 
   if (msg.key.fromMe) {
     if (botSentIds.has(msg.key.id)) return;
-    enqueue(jid, () => callAgent({ type: 'human_reply', jid, phone: phoneFromKey(msg.key), text }));
+    const phone = phoneFromKey(msg.key);
+    if (media) enqueue(jid, () => forwardMedia(msg, media, { jid, phone, fromMe: true }));
+    else enqueue(jid, () => callAgent({ type: 'human_reply', jid, phone, text }));
     return;
   }
   if (type !== 'notify') return;
 
-  const entry = pending.get(jid) || { texts: [], name: msg.pushName || '', phone: phoneFromKey(msg.key) };
-  entry.texts.push(text);
+  const entry = pending.get(jid) || { texts: [], captions: [], media: [], name: msg.pushName || '', phone: phoneFromKey(msg.key) };
   if (msg.pushName) entry.name = msg.pushName;
+  if (media) {
+    // O arquivo entra na fila antes da resposta, para aparecer na ordem certa no painel.
+    enqueue(jid, () => forwardMedia(msg, media, { jid, phone: entry.phone, name: entry.name }));
+    entry.media.push(media.kind);
+    if (media.caption) entry.captions.push(media.caption);
+  } else {
+    entry.texts.push(text);
+  }
   clearTimeout(entry.timer);
   entry.timer = setTimeout(() => enqueue(jid, () => flush(jid)), DEBOUNCE_MS);
   pending.set(jid, entry);

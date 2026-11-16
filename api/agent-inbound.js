@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getAdminClient, getBearerToken, parseBody, sendJson } from '../src/server/supabaseServer.js';
 import { normalizePhoneDigits } from '../src/server/agentUtils.js';
-import { ensureClientRegistered, runAgent } from './_agent.js';
+import { AUDIO_REPLY, composeAgentInput, ensureClientRegistered, isAudioOnly, runAgent } from './_agent.js';
+import { MEDIA_KINDS, mediaLabel, storeMedia } from './_media.js';
 import {
   getAgentSettings, getWebConfig, isChatPaused, logAgentMessage, pauseChat, secretMatches,
 } from './_whatsapp.js';
@@ -33,10 +34,36 @@ export default async function handler(req, res) {
     return sendJson(res, 200, { reply: null });
   }
 
-  const text = String(body.text || '').trim().slice(0, 2000);
-  if (!text) return sendJson(res, 200, { reply: null });
-
   const contactName = String(body.name || '').trim().slice(0, 80);
+
+  // Foto, áudio, vídeo ou arquivo: guarda para o painel. A Vicky só fica sabendo do tipo, no próximo bloco de texto.
+  if (body.type === 'media') {
+    const kind = MEDIA_KINDS.includes(body.media?.kind) ? body.media.kind : 'document';
+    const path = await storeMedia(supabase, { kind, mime: body.media?.mime, data: body.media?.data });
+    const content = mediaLabel(kind, { caption: String(body.caption || '').slice(0, 2000), fileName: body.media?.fileName });
+    const media = { type: kind, path, mime: body.media?.mime ? String(body.media.mime).slice(0, 100) : null };
+    if (body.fromMe) {
+      await pauseChat(supabase, { chatJid, phoneDigits });
+      await logAgentMessage(supabase, { chatJid, phoneDigits, role: 'assistant', source: 'human', content, media });
+    } else {
+      if (contactName) {
+        await supabase.from('agent_chats').upsert({ chat_jid: chatJid, phone_digits: phoneDigits, contact_name: contactName, updated_at: new Date().toISOString() });
+      }
+      await ensureClientRegistered(supabase, { phoneDigits, pushName: contactName });
+      await logAgentMessage(supabase, { chatJid, phoneDigits, role: 'user', content, media });
+    }
+    return sendJson(res, 200, { reply: null });
+  }
+
+  const text = String(body.text || '').trim().slice(0, 2000);
+  const parts = {
+    text,
+    captions: (Array.isArray(body.captions) ? body.captions : []).map((c) => String(c || '').slice(0, 2000)),
+    media: (Array.isArray(body.media) ? body.media : []).filter((kind) => MEDIA_KINDS.includes(kind)),
+  };
+  const agentInput = composeAgentInput(parts);
+  if (!agentInput) return sendJson(res, 200, { reply: null });
+
   if (contactName) {
     await supabase.from('agent_chats').upsert({ chat_jid: chatJid, phone_digits: phoneDigits, contact_name: contactName, updated_at: new Date().toISOString() });
   }
@@ -51,10 +78,16 @@ export default async function handler(req, res) {
     return sendJson(res, 200, { reply: null });
   }
 
+  // Só áudio: a resposta é fixa e não passa pelo modelo.
+  if (isAudioOnly(parts)) {
+    await logAgentMessage(supabase, { chatJid, phoneDigits, role: 'assistant', content: AUDIO_REPLY });
+    return sendJson(res, 200, { reply: AUDIO_REPLY });
+  }
+
   let reply;
   try {
     const anthropic = new Anthropic({ apiKey: settings.apiKey, timeout: 45_000, maxRetries: 1 });
-    reply = await runAgent({ anthropic, supabase, chatJid, phoneDigits, pushName: String(body.name || '').slice(0, 80), text });
+    reply = await runAgent({ anthropic, supabase, chatJid, phoneDigits, pushName: contactName, text: agentInput });
   } catch (error) {
     console.error('[agent] Falha no atendimento:', error?.status || '', error?.message);
     await logAgentMessage(supabase, { chatJid, phoneDigits, role: 'user', content: text });

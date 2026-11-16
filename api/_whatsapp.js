@@ -39,7 +39,7 @@ export async function sendViaService(config, recipients) {
   return data.results || [];
 }
 
-export async function logAgentMessage(supabase, { chatJid, phoneDigits, role, content, source }) {
+export async function logAgentMessage(supabase, { chatJid, phoneDigits, role, content, source, media = null }) {
   const text = String(content || '').trim();
   if (!text) return;
   const { error } = await supabase.from('agent_messages').insert({
@@ -48,6 +48,7 @@ export async function logAgentMessage(supabase, { chatJid, phoneDigits, role, co
     role,
     source: source || (role === 'user' ? 'client' : 'agent'),
     content: text.slice(0, 4000),
+    ...(media ? { media_type: media.type, media_path: media.path || null, media_mime: media.mime || null } : {}),
   });
   if (error) console.error('[agent] Falha ao registrar mensagem:', error.message);
 }

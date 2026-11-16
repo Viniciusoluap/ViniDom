@@ -10,6 +10,7 @@ import Contact from './pages/Contact';
 import InstallApp from './pages/InstallApp';
 import Admin from './pages/Admin';
 import Funcionario from './pages/Funcionario';
+import Entrar from './pages/Entrar';
 import CancellationPolicy from './pages/CancellationPolicy';
 import NotFound from './pages/NotFound';
 import { BUSINESS_INFO } from './utils/constants';
@@ -58,6 +59,7 @@ export default function App() {
           <Route path="/instalar-aplicativo" element={<InstallApp />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/funcionario" element={<Funcionario />} />
+          <Route path="/entrar" element={<Entrar />} />
           <Route path="/politica-cancelamento" element={<CancellationPolicy />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

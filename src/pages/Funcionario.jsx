@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { UserCircle, CheckCircle, XCircle, Clock, Calendar, ChevronLeft, ChevronRight, Eye, EyeOff, BarChart3, Users, Plus } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Calendar, ChevronLeft, ChevronRight, BarChart3, Users, Plus } from 'lucide-react';
 import InternalBookingForm from '../components/InternalBookingForm';
 import ClientsList from '../components/ClientsList';
 import { DAY_NAMES_PT, MONTH_NAMES_PT } from '../utils/constants';
 import { useBookings } from '../hooks/useBookings';
+import { Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { homeForSession } from '../utils/authRoles';
 import { dateToKey, formatTime, formatPrice } from '../utils/dateFormatter';
 
 const STATUS_LABELS = {
@@ -22,11 +24,6 @@ const TABS = [
 export default function Funcionario() {
   const [authed, setAuthed] = useState(false);
   const [authReady, setAuthReady] = useState(false);
-  const [email, setEmail]   = useState('');
-  const [pw, setPw]         = useState('');
-  const [showPw, setShowPw] = useState(false);
-  const [error, setError]       = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
   const [staffMember, setStaffMember] = useState(null);
   const [activeTab, setActiveTab]     = useState('dashboard');
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -51,14 +48,13 @@ export default function Funcionario() {
     let active = true;
     const applySession = (session) => {
       const metadata = session?.user?.app_metadata || {};
-      const allowed = metadata.role === 'staff' && metadata.active !== false && metadata.professional_name;
+      const allowed = homeForSession(session) === '/funcionario';
       const member = allowed ? {
         name: metadata.professional_name,
         role: metadata.professional_role || 'Equipe',
         color: metadata.professional_color || '#1a1a2e',
         initials: metadata.professional_initials || metadata.professional_name.slice(0, 2).toUpperCase(),
       } : null;
-      if (session && !allowed) void supabase.auth.signOut();
       if (active) {
         setStaffMember(member);
         setAuthed(Boolean(member));
@@ -74,34 +70,10 @@ export default function Funcionario() {
     };
   }, []);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError(false);
-    setErrorMsg('');
-    if (!supabase) {
-      setError(true);
-      setErrorMsg('Supabase Auth não configurado.');
-      return;
-    }
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password: pw,
-    });
-    if (authError) {
-      setError(true);
-      setErrorMsg('E-mail ou senha incorretos.');
-      setPw('');
-    }
-  };
-
   const handleLogout = async () => {
     await supabase?.auth.signOut();
     setAuthed(false);
     setStaffMember(null);
-    setEmail('');
-    setPw('');
-    setError(false);
-    setErrorMsg('');
   };
 
   const shift = (n) => {
@@ -169,66 +141,7 @@ export default function Funcionario() {
     </div>
   );
 
-  // ── Tela de login ──
-  if (!authed) {
-    return (
-      <div className="flex-1 flex items-center justify-center px-6 py-24 animate-fade-in">
-        <div className="w-full max-w-sm">
-          <div className="flex items-center justify-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-brand-900 flex items-center justify-center">
-              <UserCircle size={18} className="text-white" />
-            </div>
-            <div>
-              <p className="text-brand-900 font-semibold tracking-wide">Área do Funcionário</p>
-              <p className="text-brand-400 text-xs tracking-widest uppercase mt-0.5">Vinicius Cavalcante</p>
-            </div>
-          </div>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-brand-400 uppercase tracking-widest mb-1.5">
-                E-mail
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => { setEmail(e.target.value); setError(false); setErrorMsg(''); }}
-                placeholder="seu@email.com"
-                autoFocus
-                autoComplete="email"
-                className={`input-field ${error ? 'border-red-400 focus:border-red-400' : ''}`}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-brand-400 uppercase tracking-widest mb-1.5">
-                Senha
-              </label>
-              <div className="relative">
-                <input
-                  type={showPw ? 'text' : 'password'}
-                  value={pw}
-                  onChange={e => { setPw(e.target.value); setError(false); setErrorMsg(''); }}
-                  placeholder="Sua senha de acesso"
-                  autoComplete="current-password"
-                  className={`input-field pr-10 ${error ? 'border-red-400 focus:border-red-400' : ''}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw(v => !v)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-300 hover:text-brand-900 transition-colors"
-                >
-                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-              </div>
-            </div>
-            {error && (
-              <p className="text-red-500 text-xs tracking-wide -mt-2">{errorMsg}</p>
-            )}
-            <button type="submit" className="btn-primary w-full text-center">Entrar</button>
-          </form>
-        </div>
-      </div>
-    );
-  }
+  if (!authed) return <Navigate to="/entrar" replace />;
 
   if (bookingsError) return (
     <div className="flex-1 pt-24 pb-16 px-6 max-w-3xl mx-auto w-full animate-fade-in">

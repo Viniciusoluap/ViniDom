@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Lock, UserCircle } from 'lucide-react';
+import { Menu, X, UserCircle } from 'lucide-react';
 import Logo from './Logo';
 
 const NAV_LINKS = [
@@ -57,18 +57,12 @@ export default function Header() {
               Agendar
             </Link>
             <Link
-              to="/admin"
+              to="/entrar"
               className="ml-2 p-2 text-brand-500 hover:text-gold-400 transition-colors"
-              title="Acesso administrativo"
+              title="Entrar"
+              aria-label="Entrar"
             >
-              <Lock size={15} />
-            </Link>
-            <Link
-              to="/funcionario"
-              className="p-2 text-brand-500 hover:text-gold-400 transition-colors"
-              title="Área do funcionário"
-            >
-              <UserCircle size={15} />
+              <UserCircle size={16} />
             </Link>
           </nav>
 
@@ -107,18 +101,11 @@ export default function Header() {
               Agendar Horário
             </Link>
             <Link
-              to="/admin"
+              to="/entrar"
               onClick={() => setOpen(false)}
               className="mt-1 px-4 py-3 text-xs tracking-widest uppercase font-medium text-brand-500 hover:text-white transition-colors flex items-center gap-2"
             >
-              <Lock size={12} /> Admin
-            </Link>
-            <Link
-              to="/funcionario"
-              onClick={() => setOpen(false)}
-              className="px-4 py-3 text-xs tracking-widest uppercase font-medium text-brand-500 hover:text-white transition-colors flex items-center gap-2"
-            >
-              <UserCircle size={12} /> Funcionário
+              <UserCircle size={12} /> Entrar
             </Link>
           </div>
         </div>
