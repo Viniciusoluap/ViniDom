@@ -15,6 +15,43 @@ const HISTORY_LIMIT = 20;
 const BOOKING_HORIZON_DAYS = 60;
 const MIN_LEAD_MINUTES = 30;
 const SERVICE_IDS = SERVICES.map((service) => service.id);
+export const PROFILE_NAME_NOTE = 'Cadastro automático pelo WhatsApp (nome do perfil, a confirmar)';
+
+// Nome utilizável: só letras, espaços e pontuação simples (tira emojis e símbolos do perfil do WhatsApp).
+export function cleanPersonName(value) {
+  const name = String(value || '').replace(/[^\p{L}\s.'-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  return (name.match(/\p{L}/gu) || []).length >= 2 && name.length >= 3 ? name : null;
+}
+
+// Todo número que conversa com a Vicky entra no cadastro. Sem cadastro, usa o nome do perfil e marca para confirmar.
+export async function ensureClientRegistered(supabase, { phoneDigits, pushName }) {
+  if (!phoneDigits) return null;
+  const { data: existing } = await supabase.from('clients').select('name, notes').eq('phone_digits', phoneDigits).maybeSingle();
+  if (existing) return existing;
+  const name = cleanPersonName(pushName);
+  if (!name) return null;
+  const row = { phone_digits: phoneDigits, phone: maskPhone(phoneDigits), name, notes: PROFILE_NAME_NOTE };
+  const { error } = await supabase.from('clients').insert(row);
+  if (error) console.error('[agent] Falha ao cadastrar cliente:', error.message);
+  return error ? null : row;
+}
+
+// Confirma o nome informado pelo cliente: cria o cadastro ou corrige um nome que veio do perfil do WhatsApp.
+export async function saveClientName(supabase, { phoneDigits, name }) {
+  const clean = cleanPersonName(name);
+  if (!phoneDigits) return 'Não identifiquei o WhatsApp deste cliente; não foi possível cadastrar.';
+  if (!clean) return 'Nome inválido. Peça o nome completo do cliente.';
+  const { data: existing } = await supabase.from('clients').select('name, notes').eq('phone_digits', phoneDigits).maybeSingle();
+  if (!existing) {
+    const { error } = await supabase.from('clients').insert({ phone_digits: phoneDigits, phone: maskPhone(phoneDigits), name: clean });
+    return error ? 'Não foi possível cadastrar agora.' : `Cliente cadastrado: ${clean}.`;
+  }
+  if (existing.notes === PROFILE_NAME_NOTE) {
+    await supabase.from('clients').update({ name: clean, notes: null, updated_at: new Date().toISOString() }).eq('phone_digits', phoneDigits);
+    return `Cadastro confirmado: ${clean}.`;
+  }
+  return `Cliente já cadastrado como ${existing.name}.`;
+}
 
 function servicesCatalog() {
   return SERVICES.map((s) => {
@@ -26,9 +63,10 @@ function servicesCatalog() {
 export const SYSTEM_PROMPT = `Você é a Vicky, assistente virtual que atende o WhatsApp do ${BUSINESS_INFO.name} Visagismo (cortes, barba e tratamentos capilares) em ${BUSINESS_INFO.city}.
 
 Estilo:
-- Mensagens curtas e objetivas: no máximo 2 frases. Nada de textão, listas longas ou explicações que o cliente não pediu.
-- Tom cordial e profissional, português do Brasil, no máximo 1 emoji quando fizer sentido.
-- Seu nome é Vicky. Na primeira mensagem de uma conversa nova, apresente-se como Vicky, assistente do Vinicius. Se perguntarem se você é robô, diga que é a Vicky, assistente virtual do Vinicius.
+- Seja o mais objetiva possível: 1 frase curta por resposta, de preferência com menos de 100 caracteres.
+- Sem emojis, sem repetir o que o cliente disse, sem explicar o que não foi perguntado, sem listas.
+- Português do Brasil, tom cordial e profissional.
+- Seu nome é Vicky. Na primeira mensagem de uma conversa nova, apresente-se em poucas palavras (ex.: "Oi! Sou a Vicky, do Vinicius."). Se perguntarem se você é robô, diga que é a Vicky, assistente virtual do Vinicius.
 
 O que você faz: agenda, remarca, cancela e confirma horários, e tira dúvidas sobre serviços e preços.
 Pagamento: sempre no salão, no dia do atendimento. Não existe sinal, Pix antecipado nem cobrança pelo WhatsApp.
@@ -42,7 +80,7 @@ Regras:
 - Nunca invente horário: use ver_horarios antes de oferecer e ofereça no máximo 3 opções.
 - Antes de agendar, confirme serviço, dia e hora numa frase curta; só chame agendar depois que o cliente concordar.
 - Para remarcar: agende o novo horário e depois cancele o antigo.
-- Use o nome que aparece no contexto. Se não houver nome cadastrado, pergunte o nome antes de agendar.
+- Todo cliente precisa estar cadastrado com nome e WhatsApp. Se o contexto disser que o cliente não tem cadastro ou que o nome não foi confirmado, pergunte o nome dele já na primeira resposta e, quando ele informar, use cadastrar_cliente. Se o nome já estiver confirmado, use-o e não pergunte de novo.
 - Se o cliente responder SIM a um pedido de confirmação, use confirmar_presenca. Se responder NÃO, pergunte se quer remarcar ou cancelar.
 - Endereço exato, reclamações, pedidos especiais, dúvidas que você não sabe responder ou pedido para falar com o Vinicius: use chamar_vinicius e avise que ele responde em breve.
 - Se a mensagem não tiver texto (áudio, foto), peça para o cliente escrever.
@@ -85,6 +123,12 @@ export const TOOLS = [
     description: 'Registra que o cliente confirmou presença em um agendamento.',
     strict: true,
     input_schema: strictObject({ agendamento_id: { type: 'string' } }, ['agendamento_id']),
+  },
+  {
+    name: 'cadastrar_cliente',
+    description: 'Cadastra o cliente desta conversa (o WhatsApp é preenchido automaticamente) ou confirma o nome dele. Use assim que o cliente informar o nome.',
+    strict: true,
+    input_schema: strictObject({ nome: { type: 'string', description: 'Nome completo informado pelo cliente.' } }, ['nome']),
   },
   {
     name: 'chamar_vinicius',
@@ -189,6 +233,7 @@ export async function executeTool(name, input, ctx) {
     });
     if (status === 409) return 'Esse horário acabou de ser ocupado. Consulte ver_horarios de novo.';
     if (status !== 201) return `Não foi possível agendar: ${payload?.error || 'erro desconhecido'}.`;
+    await saveClientName(supabase, { phoneDigits: ctx.phoneDigits, name: clientName });
     return `Agendado (id ${payload.booking.id}): ${weekdayName(input.data)} ${formatKeyShort(input.data)} às ${input.horario}, ${services.map((s) => s.name).join(' + ')}.`;
   }
 
@@ -219,6 +264,10 @@ export async function executeTool(name, input, ctx) {
     return `Presença confirmada: ${describeBooking(row)}.`;
   }
 
+  if (name === 'cadastrar_cliente') {
+    return saveClientName(supabase, { phoneDigits: ctx.phoneDigits, name: input.nome });
+  }
+
   if (name === 'chamar_vinicius') {
     await pauseChat(supabase, { chatJid: ctx.chatJid, phoneDigits: ctx.phoneDigits });
     const ownerDigits = normalizePhoneDigits(BUSINESS_INFO.phone);
@@ -246,11 +295,13 @@ export async function buildContext(supabase, { phoneDigits, pushName, now = Date
   }
 
   let clientName = null;
+  let nameConfirmed = false;
   let upcoming = [];
   let lastVisit = null;
   if (phoneDigits) {
-    const client = await supabase.from('clients').select('name').eq('phone_digits', phoneDigits).maybeSingle();
+    const client = await supabase.from('clients').select('name, notes').eq('phone_digits', phoneDigits).maybeSingle();
     clientName = client.data?.name || null;
+    nameConfirmed = Boolean(client.data) && client.data.notes !== PROFILE_NAME_NOTE;
     const { data: rows } = await supabase
       .from('bookings')
       .select('id, date_key, time_slot, services, status, client_name, client_phone, client_confirmed_at')
@@ -259,7 +310,7 @@ export async function buildContext(supabase, { phoneDigits, pushName, now = Date
       .order('date_key', { ascending: false })
       .limit(30);
     const mine = (rows || []).filter((row) => normalizePhoneDigits(row.client_phone) === phoneDigits);
-    clientName = clientName || mine[0]?.client_name || null;
+    if (!clientName && mine[0]?.client_name) { clientName = mine[0].client_name; nameConfirmed = true; }
     upcoming = mine.filter((row) => row.date_key >= local.dateKey).reverse();
     lastVisit = mine.find((row) => row.date_key < local.dateKey)?.date_key || null;
   }
@@ -268,7 +319,9 @@ export async function buildContext(supabase, { phoneDigits, pushName, now = Date
     '[Contexto — informação interna, não copiar para o cliente]',
     `Agora: ${weekdayName(local.dateKey)} ${local.dateKey} ${minutesToHHMM(local.minutes)}`,
     `Próximos dias abertos: ${openDays.join(', ')}`,
-    `Cliente: ${clientName ? `${clientName} (cadastrado)` : `sem cadastro (nome no WhatsApp: ${pushName || 'desconhecido'})`}`,
+    `Cliente: ${clientName
+      ? (nameConfirmed ? `${clientName} (cadastrado)` : `${clientName} (nome do perfil do WhatsApp, ainda não confirmado: pergunte o nome)`)
+      : `sem cadastro (nome no perfil do WhatsApp: ${pushName || 'desconhecido'}): pergunte o nome`}`,
     `WhatsApp: ${phoneDigits ? maskPhone(phoneDigits) : 'não identificado'}`,
     upcoming.length
       ? `Agendamentos futuros:\n${upcoming.map((row) => `- id ${row.id}: ${describeBooking(row)}${row.client_confirmed_at ? ' — presença confirmada' : ''}`).join('\n')}`

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { addDaysToKey, isOpenDay, localNow, normalizePhoneDigits } from '../src/server/agentUtils.js';
 import { planFollowups } from '../api/_followups.js';
-import { executeTool, freeSlots, runAgent, toWhatsAppFormat } from '../api/_agent.js';
+import { PROFILE_NAME_NOTE, buildContext, ensureClientRegistered, executeTool, freeSlots, runAgent, saveClientName, toWhatsAppFormat } from '../api/_agent.js';
 import { SERVICES } from '../src/utils/constants.js';
 
 // Meio-dia de Fortaleza (15:00 UTC) de um dia fixo.
@@ -97,7 +97,7 @@ test('acompanhamentos: confirmação na véspera, aniversário, pós-atendimento
   const plan = planFollowups({ bookings, clients, now: NOW });
   const kinds = Object.fromEntries(plan.map((item) => [item.kind, item]));
   assert.deepEqual(plan.map((item) => item.kind), ['confirmacao', 'aniversario', 'pos_atendimento', 'retorno']);
-  assert.match(kinds.confirmacao.message, /^Oi, João! .*às 15:00 — Corte Masculino\. Confirma\? Responda SIM ou NÃO\.$/);
+  assert.equal(kinds.confirmacao.message, `Oi, João! Amanhã (${tomorrow.slice(8, 10)}/${tomorrow.slice(5, 7)}) às 15:00, Corte Masculino. Confirma? SIM ou NÃO`);
   assert.match(kinds.aniversario.message, /Feliz aniversário, Ana!/);
   assert.match(kinds.retorno.message, /25 dias/);
   assert.ok(!plan.some((item) => item.phoneDigits === '99986667777'), 'não chama cliente sumido há 90 dias');
@@ -135,4 +135,60 @@ test('loop do agente chama a ferramenta e devolve resposta curta formatada', asy
 
 test('formata negrito para o padrão do WhatsApp', () => {
   assert.equal(toWhatsAppFormat('## Oi\n**ok**'), 'Oi\n*ok*');
+});
+
+test('cadastra automaticamente quem conversa, usando o nome do perfil marcado para confirmar', async () => {
+  const supabase = fakeSupabase({ clients: [] });
+  await ensureClientRegistered(supabase, { phoneDigits: '99988887777', pushName: 'Ana Souza ✂️' });
+  assert.deepEqual(supabase.writes, [{ table: 'clients', op: 'insert', value: {
+    phone_digits: '99988887777', phone: '(99) 98888-7777', name: 'Ana Souza', notes: PROFILE_NAME_NOTE,
+  } }]);
+
+  const semNome = fakeSupabase({ clients: [] });
+  await ensureClientRegistered(semNome, { phoneDigits: '99988887777', pushName: '😀😀' });
+  assert.equal(semNome.writes.length, 0, 'sem nome utilizável a Vicky pergunta antes de cadastrar');
+
+  const jaExiste = fakeSupabase({ clients: [{ name: 'Vinicius Freitas', notes: null }] });
+  await ensureClientRegistered(jaExiste, { phoneDigits: '99981392210', pushName: 'Outro Nome' });
+  assert.equal(jaExiste.writes.length, 0, 'não duplica nem altera cadastro existente');
+});
+
+test('cadastrar_cliente confirma nome do perfil mas não sobrescreve cadastro confirmado', async () => {
+  const doPerfil = fakeSupabase({ clients: [{ name: 'Aninha', notes: PROFILE_NAME_NOTE }] });
+  assert.match(await saveClientName(doPerfil, { phoneDigits: '99988887777', name: 'Ana Souza' }), /confirmado: Ana Souza/);
+  assert.equal(doPerfil.writes[0].op, 'update');
+  assert.equal(doPerfil.writes[0].value.name, 'Ana Souza');
+  assert.equal(doPerfil.writes[0].value.notes, null);
+
+  const confirmado = fakeSupabase({ clients: [{ name: 'Vinicius Freitas', notes: null }] });
+  assert.match(await saveClientName(confirmado, { phoneDigits: '99981392210', name: 'Fulano' }), /já cadastrado como Vinicius Freitas/);
+  assert.equal(confirmado.writes.length, 0);
+
+  const novo = fakeSupabase({ clients: [] });
+  assert.match(await executeTool('cadastrar_cliente', { nome: 'João Silva' }, { supabase: novo, phoneDigits: '99911112222' }), /cadastrado: João Silva/);
+  assert.deepEqual(novo.writes[0].value, { phone_digits: '99911112222', phone: '(99) 91111-2222', name: 'João Silva' });
+});
+
+test('contexto avisa a Vicky para perguntar o nome quando ainda não foi confirmado', async () => {
+  const doPerfil = fakeSupabase({ clients: [{ name: 'Aninha', notes: PROFILE_NAME_NOTE }] });
+  const ctx = await buildContext(doPerfil, { phoneDigits: '99988887777', pushName: 'Aninha', now: NOW });
+  assert.match(ctx.text, /Aninha \(nome do perfil do WhatsApp, ainda não confirmado: pergunte o nome\)/);
+
+  const confirmado = fakeSupabase({ clients: [{ name: 'Vinicius Freitas', notes: null }] });
+  const ok = await buildContext(confirmado, { phoneDigits: '99981392210', now: NOW });
+  assert.match(ok.text, /Vinicius Freitas \(cadastrado\)/);
+});
+
+test('confirmação 1 hora antes do horário, sem repetir e sem avisar quem acabou de agendar', () => {
+  // NOW = 12:00 em Fortaleza. Horário às 12:45 (765 min) entra; 13:30 (810 min) ainda não.
+  const base = { services: [{ name: 'Barba' }], client_name: 'Pedro Lima', created_at: '2026-11-01T10:00:00Z' };
+  const bookings = [
+    { ...base, id: 'h1', date_key: TODAY, time_slot: 765, client_phone: '(99) 97777-1111' },
+    { ...base, id: 'h2', date_key: TODAY, time_slot: 810, client_phone: '(99) 97777-2222' },
+    { ...base, id: 'h3', date_key: TODAY, time_slot: 750, client_phone: '(99) 97777-3333', created_at: new Date(NOW - 30 * 60_000).toISOString() },
+  ];
+  const plan = planFollowups({ bookings, recentPhones: new Set(['99977771111']), now: NOW });
+  assert.deepEqual(plan.map((item) => [item.kind, item.ref]), [['lembrete_1h', 'h1']]);
+  assert.equal(plan[0].message, 'Oi, Pedro! Hoje às 12:45, Barba. Te esperamos!');
+  assert.equal(planFollowups({ bookings, sentRefs: new Set(['lembrete_1h:h1']), now: NOW }).length, 0);
 });

@@ -1,13 +1,15 @@
 import { BUSINESS_INFO } from '../src/utils/constants.js';
 import {
-  addDaysToKey, firstName, formatKeyShort, localNow, minutesToHHMM, normalizePhoneDigits, weekdayName,
+  addDaysToKey, firstName, formatKeyShort, localNow, minutesToHHMM, normalizePhoneDigits,
 } from '../src/server/agentUtils.js';
 
 export const MAX_PER_RUN = 15;
 const RETURN_AFTER_DAYS = 21;
 const RETURN_UNTIL_DAYS = 45;
 const QUIET_HOURS = 20; // não manda mais de uma mensagem automática por cliente nesse intervalo
-const PRIORITY = ['confirmacao', 'aniversario', 'pos_atendimento', 'retorno'];
+const PRIORITY = ['lembrete_1h', 'confirmacao', 'aniversario', 'pos_atendimento', 'retorno'];
+const URGENT = new Set(['lembrete_1h', 'confirmacao']); // ignoram o intervalo entre mensagens automáticas
+const REMINDER_BEFORE_MIN = 60;
 
 function daysBetween(fromKey, toKey) {
   return Math.round((new Date(`${toKey}T12:00:00Z`) - new Date(`${fromKey}T12:00:00Z`)) / 86400_000);
@@ -20,10 +22,11 @@ function servicesLabel(services) {
 const hi = (name) => (name ? `Oi, ${name}!` : 'Oi!');
 
 export const MESSAGES = {
-  confirmacao: (name, row) => `${hi(name)} Lembrando do seu horário amanhã (${weekdayName(row.date_key).toLowerCase()}, ${formatKeyShort(row.date_key)}) às ${minutesToHHMM(row.time_slot)} — ${servicesLabel(row.services)}. Confirma? Responda SIM ou NÃO.`,
-  aniversario: (name) => `Feliz aniversário${name ? `, ${name}` : ''}! 🎉 Que seu dia seja ótimo. Abraço do Vinicius Cavalcante.`,
-  pos_atendimento: (name) => `${hi(name)} Obrigado pela visita ontem. Qualquer coisa, é só chamar por aqui.`,
-  retorno: (name, days) => `${hi(name)} Já faz ${days} dias do seu último atendimento. Quer que eu veja um horário pra você?`,
+  confirmacao: (name, row) => `${hi(name)} Amanhã (${formatKeyShort(row.date_key)}) às ${minutesToHHMM(row.time_slot)}, ${servicesLabel(row.services)}. Confirma? SIM ou NÃO`,
+  lembrete_1h: (name, row) => `${hi(name)} Hoje às ${minutesToHHMM(row.time_slot)}, ${servicesLabel(row.services)}. Te esperamos!`,
+  aniversario: (name) => `Feliz aniversário${name ? `, ${name}` : ''}! 🎉 Abraço do Vinicius.`,
+  pos_atendimento: (name) => `${hi(name)} Obrigado pela visita!`,
+  retorno: (name, days) => `${hi(name)} Faz ${days} dias da sua última visita. Quer agendar?`,
 };
 
 // bookings: linhas não canceladas (date_key, time_slot, services, client_name, client_phone, client_confirmed_at, created_at, id)
@@ -58,6 +61,12 @@ export function planFollowups({ bookings = [], clients = [], sentRefs = new Set(
       if (row.date_key === tomorrow && !row.client_confirmed_at && !createdRecently) {
         add('confirmacao', row.id, phone, MESSAGES.confirmacao(name, row));
       }
+      // Confirmação 1 hora antes (o cron roda a cada 15 min, então sai entre 60 e 45 min antes).
+      const minutesUntil = row.time_slot - local.minutes;
+      const bookedJustNow = row.created_at && now - new Date(row.created_at).getTime() < 90 * 60_000;
+      if (row.date_key === today && minutesUntil > 0 && minutesUntil <= REMINDER_BEFORE_MIN && !bookedJustNow) {
+        add('lembrete_1h', row.id, phone, MESSAGES.lembrete_1h(name, row));
+      }
     }
     if (local.hour >= 10 && rows.some((row) => row.date_key === yesterday)) {
       add('pos_atendimento', `${phone}:${yesterday}`, phone, MESSAGES.pos_atendimento(name));
@@ -84,7 +93,7 @@ export function planFollowups({ bookings = [], clients = [], sentRefs = new Set(
   const usedPhones = new Set();
   for (const item of candidates) {
     if (usedPhones.has(item.phoneDigits)) continue;
-    if (item.kind !== 'confirmacao' && recentPhones.has(item.phoneDigits)) continue;
+    if (!URGENT.has(item.kind) && recentPhones.has(item.phoneDigits)) continue;
     usedPhones.add(item.phoneDigits);
     chosen.push(item);
     if (chosen.length >= MAX_PER_RUN) break;
