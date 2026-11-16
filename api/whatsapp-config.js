@@ -1,4 +1,5 @@
 import { getAdminClient, requireAdmin, sendJson, parseBody } from '../src/server/supabaseServer.js';
+import { AGENT_DEFAULTS } from './_whatsapp.js';
 
 function maskToken(value) {
   const str = String(value || '');
@@ -36,6 +37,9 @@ export default async function handler(req, res) {
       agent: {
         enabled: agent.enabled ?? true,
         followups: agent.followups ?? true,
+        ownerPhone: agent.ownerPhone || AGENT_DEFAULTS.ownerPhone,
+        address: agent.address || '',
+        mapsUrl: agent.mapsUrl || '',
         hasApiKey: Boolean(apiKey),
         apiKeyPreview: maskToken(apiKey),
       },
@@ -76,6 +80,17 @@ export default async function handler(req, res) {
     const next = { ...current };
     if (typeof body?.enabled === 'boolean') next.enabled = body.enabled;
     if (typeof body?.followups === 'boolean') next.followups = body.followups;
+    if (body?.ownerPhone !== undefined) {
+      const digits = String(body.ownerPhone || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+      if (!/^\d{10,11}$/.test(digits)) return sendJson(res, 400, { error: 'WhatsApp para avisos inválido. Use DDD + número.' });
+      next.ownerPhone = digits;
+    }
+    if (body?.address !== undefined) next.address = String(body.address || '').trim().slice(0, 200);
+    if (body?.mapsUrl !== undefined) {
+      const mapsUrl = String(body.mapsUrl || '').trim();
+      if (mapsUrl && !/^https:\/\/[^\s]{8,500}$/.test(mapsUrl)) return sendJson(res, 400, { error: 'Link do mapa inválido. Cole o link que começa com https://' });
+      next.mapsUrl = mapsUrl;
+    }
     if (body?.apiKey !== undefined) {
       const apiKey = String(body.apiKey || '').trim();
       if (apiKey && !/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(apiKey)) return sendJson(res, 400, { error: 'Chave da API do Claude inválida.' });

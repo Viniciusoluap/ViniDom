@@ -87,7 +87,7 @@ export default async function handler(req, res) {
   let reply;
   try {
     const anthropic = new Anthropic({ apiKey: settings.apiKey, timeout: 45_000, maxRetries: 1 });
-    reply = await runAgent({ anthropic, supabase, chatJid, phoneDigits, pushName: contactName, text: agentInput });
+    reply = await runAgent({ anthropic, supabase, chatJid, phoneDigits, pushName: contactName, text: agentInput, settings });
   } catch (error) {
     console.error('[agent] Falha no atendimento:', error?.status || '', error?.message);
     await logAgentMessage(supabase, { chatJid, phoneDigits, role: 'user', content: text });

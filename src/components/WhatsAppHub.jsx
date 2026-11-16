@@ -74,7 +74,8 @@ export default function WhatsAppHub({ bookings }) {
   const [officialSaving, setOfficialSaving] = useState(false);
   const [officialMsg, setOfficialMsg] = useState('');
 
-  const [agent, setAgent] = useState({ enabled: true, followups: true, hasApiKey: false, apiKeyPreview: '' });
+  const [agent, setAgent] = useState({ enabled: true, followups: true, hasApiKey: false, apiKeyPreview: '', ownerPhone: '', address: '', mapsUrl: '' });
+  const [agentInfo, setAgentInfo] = useState({ ownerPhone: '', address: '', mapsUrl: '' });
   const [agentKey, setAgentKey] = useState('');
   const [agentEditingKey, setAgentEditingKey] = useState(false);
   const [agentSaving, setAgentSaving] = useState(false);
@@ -127,7 +128,10 @@ export default function WhatsAppHub({ bookings }) {
       if (ok) {
         setOfficial(data.official);
         setWeb(data.web);
-        if (data.agent) setAgent(data.agent);
+        if (data.agent) {
+          setAgent(data.agent);
+          setAgentInfo({ ownerPhone: data.agent.ownerPhone || '', address: data.agent.address || '', mapsUrl: data.agent.mapsUrl || '' });
+        }
       }
     } catch {
       /* mantém estado anterior se a checagem falhar */
@@ -465,6 +469,48 @@ export default function WhatsAppHub({ bookings }) {
               />
               Mensagens automáticas: confirmação na véspera, pós-atendimento, retorno após 21 dias e aniversário
             </label>
+          </div>
+
+          <div className="border-t border-brand-50 pt-4 space-y-3">
+            <p className="text-xs font-semibold text-brand-400 uppercase tracking-widest">Informações que a Vicky usa</p>
+            <label className="block text-xs text-brand-500">
+              Endereço do salão (a Vicky informa quando perguntarem)
+              <input
+                type="text"
+                value={agentInfo.address}
+                onChange={e => setAgentInfo(v => ({ ...v, address: e.target.value }))}
+                placeholder="Rua, número, bairro — Imperatriz/MA"
+                className="input-field text-sm mt-1"
+              />
+            </label>
+            <label className="block text-xs text-brand-500">
+              Link do Google Maps (enviado quando pedirem a localização)
+              <input
+                type="url"
+                value={agentInfo.mapsUrl}
+                onChange={e => setAgentInfo(v => ({ ...v, mapsUrl: e.target.value }))}
+                placeholder="https://maps.app.goo.gl/..."
+                className="input-field text-sm mt-1"
+              />
+            </label>
+            <label className="block text-xs text-brand-500">
+              WhatsApp que recebe os avisos quando um cliente pede para falar com você
+              <input
+                type="tel"
+                value={agentInfo.ownerPhone}
+                onChange={e => setAgentInfo(v => ({ ...v, ownerPhone: e.target.value }))}
+                placeholder="(99) 98116-2478"
+                className="input-field text-sm mt-1"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => saveAgent({ address: agentInfo.address, mapsUrl: agentInfo.mapsUrl, ownerPhone: agentInfo.ownerPhone }, 'Informações salvas. A Vicky já usa na próxima conversa.')}
+              disabled={agentSaving}
+              className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 disabled:opacity-40"
+            >
+              <Save size={13} /> {agentSaving ? 'Salvando...' : 'Salvar informações'}
+            </button>
           </div>
 
           {agentMsg && <p className="text-xs text-brand-500">{agentMsg}</p>}

@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 
-export const AGENT_DEFAULTS = { enabled: true, followups: true };
+// ownerPhone: número pessoal do Vinicius, que recebe os avisos quando um cliente pede atendimento humano.
+// O número conectado ao WhatsApp Web é o da Vicky, por isso o aviso não pode ir para ele.
+export const AGENT_DEFAULTS = { enabled: true, followups: true, ownerPhone: '99981162478', address: '', mapsUrl: '' };
 
 export async function readSetting(supabase, key) {
   const { data } = await supabase.from('integration_settings').select('value').eq('key', key).maybeSingle();
@@ -12,6 +14,9 @@ export async function getAgentSettings(supabase) {
   return {
     enabled: stored.enabled ?? AGENT_DEFAULTS.enabled,
     followups: stored.followups ?? AGENT_DEFAULTS.followups,
+    ownerPhone: stored.ownerPhone || AGENT_DEFAULTS.ownerPhone,
+    address: stored.address || AGENT_DEFAULTS.address,
+    mapsUrl: stored.mapsUrl || AGENT_DEFAULTS.mapsUrl,
     apiKey: process.env.ANTHROPIC_API_KEY || stored.apiKey || '',
   };
 }

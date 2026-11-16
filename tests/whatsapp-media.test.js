@@ -46,3 +46,25 @@ test('lista de clientes junta agendamentos e cadastro (disparo em massa usa a me
   const list = mergeClients(bookings, registered);
   assert.deepEqual(list.map((c) => [c.name, c.visits]), [['Vinicius cavalcante', 1], ['Vinicius Freitas', 0]]);
 });
+
+test('escolha do profissional: nome completo, primeiro nome ou sem preferência', async () => {
+  const { pickProfessional, listProfessionals, buildContext } = await import('../api/_agent.js');
+  const pros = ['Vinicius Cavalcante', 'Ana Júlia'];
+  assert.equal(pickProfessional(pros, 'ana julia'), 'Ana Júlia');
+  assert.equal(pickProfessional(pros, 'Ana'), 'Ana Júlia');
+  assert.equal(pickProfessional(pros, ''), 'Vinicius Cavalcante');
+  assert.equal(pickProfessional(pros, 'tanto faz'), 'Vinicius Cavalcante');
+  assert.equal(pickProfessional(pros, 'Pedro'), null);
+
+  const fakeAuth = { auth: { admin: { listUsers: async () => ({ data: { users: [
+    { app_metadata: { role: 'staff', professional_name: 'Ana Júlia' } },
+    { app_metadata: { role: 'staff', professional_name: 'Inativo', active: false } },
+    { app_metadata: { role: 'admin' } },
+  ] }, error: null }) } } };
+  assert.deepEqual(await listProfessionals(fakeAuth), ['Vinicius Cavalcante', 'Ana Júlia']);
+
+  const empty = { from: () => { const b = { select: () => b, eq: () => b, ilike: () => b, neq: () => b, order: () => b, limit: () => b, maybeSingle: async () => ({ data: null }), then: (r) => r({ data: [] }) }; return b; } };
+  const ctx = await buildContext(empty, { phoneDigits: '99981392210', pushName: 'Carlos', settings: { address: 'Rua X, 10', mapsUrl: 'https://maps.app.goo.gl/abc' }, professionals: pros });
+  assert.match(ctx.text, /Endereço do salão: Rua X, 10 — mapa: https:\/\/maps\.app\.goo\.gl\/abc/);
+  assert.match(ctx.text, /Profissionais: Vinicius Cavalcante, Ana Júlia \(pergunte com qual o cliente prefere\)/);
+});
