@@ -8,7 +8,7 @@ function authorized(req) {
   return secretMatches(header.startsWith('Bearer ') ? header.slice(7) : '', process.env.CRON_SECRET);
 }
 
-// Roda de hora em hora (vercel.json): confirmações, parabéns, pós-atendimento e convite de retorno.
+// Roda a cada 15 min (vercel.json): confirmação na véspera e 1h antes, parabéns, pós-atendimento e retorno.
 export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) {
     res.setHeader('Allow', 'GET, POST');

@@ -97,7 +97,7 @@ test('acompanhamentos: confirmação na véspera, aniversário, pós-atendimento
   const plan = planFollowups({ bookings, clients, now: NOW });
   const kinds = Object.fromEntries(plan.map((item) => [item.kind, item]));
   assert.deepEqual(plan.map((item) => item.kind), ['confirmacao', 'aniversario', 'pos_atendimento', 'retorno']);
-  assert.match(kinds.confirmacao.message, /^Oi, João! .*às 15:00 — Corte Masculino\. Confirma\? Responda SIM ou NÃO\.$/);
+  assert.equal(kinds.confirmacao.message, `Oi, João! Amanhã (${tomorrow.slice(8, 10)}/${tomorrow.slice(5, 7)}) às 15:00, Corte Masculino. Confirma? SIM ou NÃO`);
   assert.match(kinds.aniversario.message, /Feliz aniversário, Ana!/);
   assert.match(kinds.retorno.message, /25 dias/);
   assert.ok(!plan.some((item) => item.phoneDigits === '99986667777'), 'não chama cliente sumido há 90 dias');
@@ -177,4 +177,18 @@ test('contexto avisa a Vicky para perguntar o nome quando ainda não foi confirm
   const confirmado = fakeSupabase({ clients: [{ name: 'Vinicius Freitas', notes: null }] });
   const ok = await buildContext(confirmado, { phoneDigits: '99981392210', now: NOW });
   assert.match(ok.text, /Vinicius Freitas \(cadastrado\)/);
+});
+
+test('confirmação 1 hora antes do horário, sem repetir e sem avisar quem acabou de agendar', () => {
+  // NOW = 12:00 em Fortaleza. Horário às 12:45 (765 min) entra; 13:30 (810 min) ainda não.
+  const base = { services: [{ name: 'Barba' }], client_name: 'Pedro Lima', created_at: '2026-11-01T10:00:00Z' };
+  const bookings = [
+    { ...base, id: 'h1', date_key: TODAY, time_slot: 765, client_phone: '(99) 97777-1111' },
+    { ...base, id: 'h2', date_key: TODAY, time_slot: 810, client_phone: '(99) 97777-2222' },
+    { ...base, id: 'h3', date_key: TODAY, time_slot: 750, client_phone: '(99) 97777-3333', created_at: new Date(NOW - 30 * 60_000).toISOString() },
+  ];
+  const plan = planFollowups({ bookings, recentPhones: new Set(['99977771111']), now: NOW });
+  assert.deepEqual(plan.map((item) => [item.kind, item.ref]), [['lembrete_1h', 'h1']]);
+  assert.equal(plan[0].message, 'Oi, Pedro! Hoje às 12:45, Barba. Te esperamos!');
+  assert.equal(planFollowups({ bookings, sentRefs: new Set(['lembrete_1h:h1']), now: NOW }).length, 0);
 });

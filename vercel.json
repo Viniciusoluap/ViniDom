@@ -1,8 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/agent-inbound.js": { "maxDuration": 60 },
-    "api/agent-cron.js": { "maxDuration": 300 }
+    "api/agent-inbound.js": {
+      "maxDuration": 60
+    },
+    "api/agent-cron.js": {
+      "maxDuration": 300
+    }
   },
   "crons": [
     {
@@ -11,7 +15,7 @@
     },
     {
       "path": "/api/agent-cron",
-      "schedule": "5 12-22 * * *"
+      "schedule": "*/15 11-22 * * *"
     }
   ],
   "rewrites": [
