@@ -3,6 +3,8 @@ import { Pencil, Check, X, RefreshCw, Send, Users, Wifi, WifiOff, Search, Smartp
 import { formatDateLong } from '../utils/dateFormatter';
 import { supabase } from '../lib/supabase';
 import WhatsAppConversations from './WhatsAppConversations';
+import { mergeClients } from '../utils/clientDirectory';
+import { loadClients } from '../utils/clientService';
 
 const STORAGE_KEY = 'vcvisagismo_wa_templates';
 
@@ -36,37 +38,6 @@ function loadTemplates() {
 
 function saveTemplates(templates) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
-}
-
-function buildClientMap(bookings) {
-  const map = new Map();
-  bookings.forEach((b) => {
-    const phone = (b.client?.phone || '').replace(/\D/g, '');
-    if (!phone) return;
-    const bDate = new Date(b.date);
-    const existing = map.get(phone);
-    if (!existing) {
-      map.set(phone, {
-        name:      b.client.name      || '',
-        phone:     b.client.phone     || '',
-        birthdate: b.client?.birthdate || '',
-        visits:    b.status !== 'cancelled' ? 1 : 0,
-        lastVisit: b.status !== 'cancelled' ? bDate : null,
-        lastDate:  bDate,
-      });
-    } else {
-      if (bDate > existing.lastDate) {
-        existing.name      = b.client.name      || existing.name;
-        existing.birthdate = b.client?.birthdate || existing.birthdate;
-        existing.lastDate  = bDate;
-      }
-      if (b.status !== 'cancelled') {
-        existing.visits += 1;
-        if (!existing.lastVisit || bDate > existing.lastVisit) existing.lastVisit = bDate;
-      }
-    }
-  });
-  return Array.from(map.values());
 }
 
 const daysSince = (date) => Math.floor((new Date() - new Date(date)) / 86400000);
@@ -124,7 +95,14 @@ export default function WhatsAppHub({ bookings }) {
   const [sending, setSending]               = useState(false);
   const [sendLog, setSendLog]               = useState(null);
 
-  const clients = useMemo(() => buildClientMap(bookings), [bookings]);
+  const [registered, setRegistered] = useState([]);
+  useEffect(() => {
+    let active = true;
+    loadClients().then((list) => { if (active) setRegistered(list); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const clients = useMemo(() => mergeClients(bookings, registered), [bookings, registered]);
 
   const authFetch = async (url, options = {}) => {
     if (!supabase) throw new Error('Supabase Auth não está configurado.');

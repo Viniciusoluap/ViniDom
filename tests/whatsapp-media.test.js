@@ -35,3 +35,14 @@ test('acesso único: cada perfil vai para a sua área', () => {
   assert.equal(homeForSession({ user: { app_metadata: {} } }), null);
   assert.equal(homeForSession(null), null);
 });
+
+test('lista de clientes junta agendamentos e cadastro (disparo em massa usa a mesma)', async () => {
+  const { mergeClients } = await import('../src/utils/clientDirectory.js');
+  const bookings = [{ client: { name: 'Vini', phone: '(99) 98462-6896' }, date: '2026-06-29', status: 'attended', totalPrice: 80 }];
+  const registered = [
+    { phone_digits: '99984626896', phone: '(99) 98462-6896', name: 'Vinicius cavalcante' },
+    { phone_digits: '99981392210', phone: '(99) 98139-2210', name: 'Vinicius Freitas' },
+  ];
+  const list = mergeClients(bookings, registered);
+  assert.deepEqual(list.map((c) => [c.name, c.visits]), [['Vinicius cavalcante', 1], ['Vinicius Freitas', 0]]);
+});

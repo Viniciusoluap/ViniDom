@@ -3,6 +3,7 @@ import { Pencil, Trash2, X, Check, Plus } from 'lucide-react';
 import { formatPrice, formatDate } from '../utils/dateFormatter';
 import { editClient, loadClients, phoneDigits, removeClient, saveClient } from '../utils/clientService';
 import ClientRegistration from './ClientRegistration';
+import { mergeClients } from '../utils/clientDirectory';
 
 export default function ClientsList({ bookings, onUpdate, onDelete, canDelete = true }) {
   const [editing, setEditing]   = useState(null);
@@ -25,48 +26,7 @@ export default function ClientsList({ bookings, onUpdate, onDelete, canDelete = 
     setRegistered(await loadClients());
   };
 
-  const clients = useMemo(() => {
-    const map = new Map();
-    bookings.forEach((b) => {
-      const phone = phoneDigits(b.client?.phone);
-      if (!phone) return;
-      const existing = map.get(phone);
-      const bDate = new Date(b.date);
-      if (!existing) {
-        map.set(phone, {
-          name:       b.client.name      || '',
-          phone:      b.client.phone     || '',
-          email:      b.client.email     || '',
-          birthdate:  b.client.birthdate || '',
-          visits:     b.status !== 'cancelled' ? 1 : 0,
-          totalSpent: b.status !== 'cancelled' ? (b.totalPrice || 0) : 0,
-          lastVisit:  b.status !== 'cancelled' ? bDate : null,
-          lastDate:   bDate,
-        });
-      } else {
-        if (bDate > existing.lastDate) {
-          existing.name      = b.client.name      || existing.name;
-          existing.email     = b.client.email     || existing.email;
-          existing.birthdate = b.client.birthdate || existing.birthdate;
-          existing.lastDate  = bDate;
-        }
-        if (b.status !== 'cancelled') {
-          existing.visits     += 1;
-          existing.totalSpent += b.totalPrice || 0;
-          if (!existing.lastVisit || bDate > existing.lastVisit) existing.lastVisit = bDate;
-        }
-      }
-    });
-    registered.forEach(c => {
-      const existing = map.get(c.phone_digits);
-      if (existing) Object.assign(existing, { name: c.name, phone: c.phone, email: c.email || '', birthdate: c.birthdate || '' });
-      else map.set(c.phone_digits, {
-        name: c.name, phone: c.phone, email: c.email || '', birthdate: c.birthdate || '',
-        visits: 0, totalSpent: 0, lastVisit: null,
-      });
-    });
-    return Array.from(map.values()).sort((a, b) => b.visits - a.visits || a.name.localeCompare(b.name));
-  }, [bookings, registered]);
+  const clients = useMemo(() => mergeClients(bookings, registered), [bookings, registered]);
 
   const startEdit = (c) => {
     setEditing(c.phone);
