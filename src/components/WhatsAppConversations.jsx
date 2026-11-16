@@ -7,7 +7,7 @@ const THREAD_POLL_MS = 5000;
 
 const SOURCE_STYLE = {
   client: { label: null, bubble: 'bg-white border border-brand-100 text-brand-900', align: 'justify-start' },
-  agent: { label: 'Agente', bubble: 'bg-brand-900 text-white', align: 'justify-end' },
+  agent: { label: 'Vicky', bubble: 'bg-brand-900 text-white', align: 'justify-end' },
   human: { label: 'Você', bubble: 'bg-green-600 text-white', align: 'justify-end' },
   auto: { label: 'Automática', bubble: 'bg-amber-100 text-amber-900', align: 'justify-end' },
   bulk: { label: 'Disparo', bubble: 'bg-blue-100 text-blue-900', align: 'justify-end' },
@@ -196,7 +196,7 @@ export default function WhatsAppConversations({ connected }) {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-brand-900 truncate">{selected.name}</p>
                 <p className="text-xs text-brand-400 truncate">
-                  {selected.phone || 'Número oculto pelo WhatsApp'} · {paused ? 'Agente pausado — você está atendendo' : 'Agente atendendo'}
+                  {selected.phone || 'Número oculto pelo WhatsApp'} · {paused ? 'Vicky pausada — você está atendendo' : 'Vicky atendendo'}
                 </p>
               </div>
               <button
@@ -206,7 +206,7 @@ export default function WhatsAppConversations({ connected }) {
                 className="btn-secondary text-[11px] py-1.5 px-3 flex items-center gap-1.5 shrink-0 disabled:opacity-40"
               >
                 {paused
-                  ? <><Bot size={12} /> Devolver<span className="hidden sm:inline"> ao agente</span></>
+                  ? <><Bot size={12} /> Devolver<span className="hidden sm:inline"> para a Vicky</span></>
                   : <><Hand size={12} /> Assumir<span className="hidden sm:inline"> conversa</span></>}
               </button>
             </div>
@@ -235,7 +235,7 @@ export default function WhatsAppConversations({ connected }) {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-                placeholder={connected ? 'Escreva sua resposta... (o agente pausa nesta conversa por 12h)' : 'Conecte o WhatsApp Web para responder pelo painel'}
+                placeholder={connected ? 'Escreva sua resposta... (a Vicky pausa nesta conversa por 12h)' : 'Conecte o WhatsApp Web para responder pelo painel'}
                 disabled={!connected || busy}
                 rows={2}
                 className="input-field text-sm resize-none flex-1 disabled:opacity-50"

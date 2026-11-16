@@ -73,7 +73,7 @@ const daysSince = (date) => Math.floor((new Date() - new Date(date)) / 86400000)
 
 const SUB_TABS = [
   { id: 'conversas',     label: 'Conversas',          icon: MessagesSquare },
-  { id: 'atendimento',   label: 'Atendimento automático', icon: Bot },
+  { id: 'atendimento',   label: 'Vicky (atendimento)', icon: Bot },
   { id: 'api',           label: 'API Oficial',        icon: ShieldCheck },
   { id: 'web',           label: 'WhatsApp Web',       icon: Smartphone },
   { id: 'disparo',       label: 'Disparo em massa',   icon: Megaphone },
@@ -420,7 +420,7 @@ export default function WhatsAppHub({ bookings }) {
       <section>
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest">
-            Atendimento automático
+            Vicky — atendimento automático
           </h2>
           <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 ${agent.hasApiKey && agent.enabled ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
             <Bot size={10} />
@@ -431,7 +431,7 @@ export default function WhatsAppHub({ bookings }) {
         <div className="bg-white border border-brand-100 p-5 space-y-4">
           <p className="text-xs text-brand-500 leading-relaxed">
             Responde os clientes no WhatsApp Web: mostra horários, agenda, remarca, cancela e confirma presença.
-            Pagamento sempre no salão. Quando você responde uma conversa pelo celular, o agente sai dela por 12 horas.
+            Pagamento sempre no salão. Quando você responde uma conversa pelo celular, a Vicky sai dela por 12 horas.
           </p>
 
           {web.configured && webConn.status !== 'connected' && (
