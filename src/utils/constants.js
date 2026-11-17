@@ -102,6 +102,17 @@ export const SERVICES = [
     popular: false,
     priceLabel: null,
   },
+  {
+    id: 8,
+    name: 'Corte Feminino',
+    category: 'Cortes',
+    duration: 40,
+    price: 280,
+    description: 'Corte feminino com visagismo, pensado para valorizar o seu rosto e o seu estilo.',
+    icon: '💇‍♀️',
+    popular: false,
+    priceLabel: null,
+  },
 ];
 
 export const CATEGORIES = ['Todos', 'Cortes', 'Barba', 'Coloração', 'Tratamento'];
@@ -122,4 +133,5 @@ export const CANCELLATION_POLICY = {
 
 export const STAFF = [
   { id: 1, name: 'Vinicius Cavalcante', role: 'Visagista & Hair Expert', color: '#1a1a2e', initials: 'VC' },
+  { id: 2, name: 'Cassiano', role: 'Profissional', color: '#8a6d3b', initials: 'CA' },
 ];
