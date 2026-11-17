@@ -292,9 +292,9 @@ export async function executeTool(name, input, ctx) {
   return `Ferramenta desconhecida: ${name}`;
 }
 
-// Profissionais que atendem: o dono do salão e os funcionários com acesso ativo no painel.
+// Profissionais que atendem: a equipe cadastrada e os funcionários com acesso ativo no painel.
 export async function listProfessionals(supabase) {
-  const names = STAFF.map((member) => member.name).filter(Boolean).slice(0, 1);
+  const names = STAFF.map((member) => member.name).filter(Boolean);
   try {
     const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
     if (error) throw error;

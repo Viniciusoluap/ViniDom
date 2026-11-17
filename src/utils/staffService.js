@@ -18,7 +18,12 @@ export function loadStaff() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const safe = sanitizeStaff(parsed);
+      const stored = sanitizeStaff(parsed);
+      // Funcionário novo do cadastro padrão entra também em quem já tinha a lista salva neste aparelho,
+      // a não ser que tenha sido excluído aqui de propósito.
+      const removed = removedIds();
+      const missing = DEFAULT_STAFF.filter(d => !removed.includes(d.id) && !stored.some(m => m.id === d.id || m.name === d.name));
+      const safe = [...stored, ...sanitizeStaff(missing)];
       // Remove senhas legadas do armazenamento local assim que o app é aberto.
       localStorage.setItem(KEY, JSON.stringify(safe));
       return safe;
@@ -27,6 +32,12 @@ export function loadStaff() {
     // localStorage pode estar indisponível em modo privado ou durante SSR.
   }
   return sanitizeStaff(DEFAULT_STAFF);
+}
+
+const REMOVED_KEY = 'vcvisagismo_staff_removed';
+
+function removedIds() {
+  try { return JSON.parse(localStorage.getItem(REMOVED_KEY) || '[]'); } catch { return []; }
 }
 
 function persist(staff) {
@@ -55,5 +66,6 @@ export function updateStaffMember(staff, id, updates) {
 export function deleteStaffMember(staff, id) {
   const next = staff.filter(m => m.id !== id);
   persist(next);
+  try { localStorage.setItem(REMOVED_KEY, JSON.stringify([...new Set([...removedIds(), id])])); } catch { /* sem armazenamento local */ }
   return sanitizeStaff(next);
 }

@@ -61,7 +61,7 @@ test('escolha do profissional: nome completo, primeiro nome ou sem preferência'
     { app_metadata: { role: 'staff', professional_name: 'Inativo', active: false } },
     { app_metadata: { role: 'admin' } },
   ] }, error: null }) } } };
-  assert.deepEqual(await listProfessionals(fakeAuth), ['Vinicius Cavalcante', 'Ana Júlia']);
+  assert.deepEqual(await listProfessionals(fakeAuth), ['Vinicius Cavalcante', 'Cassiano', 'Ana Júlia']);
 
   const empty = { from: () => { const b = { select: () => b, eq: () => b, ilike: () => b, neq: () => b, order: () => b, limit: () => b, maybeSingle: async () => ({ data: null }), then: (r) => r({ data: [] }) }; return b; } };
   const ctx = await buildContext(empty, { phoneDigits: '99981392210', pushName: 'Carlos', settings: { address: 'Rua X, 10', mapsUrl: 'https://maps.app.goo.gl/abc' }, professionals: pros });
