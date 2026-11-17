@@ -68,3 +68,18 @@ test('escolha do profissional: nome completo, primeiro nome ou sem preferência'
   assert.match(ctx.text, /Endereço do salão: Rua X, 10 — mapa: https:\/\/maps\.app\.goo\.gl\/abc/);
   assert.match(ctx.text, /Profissionais: Vinicius Cavalcante, Ana Júlia \(pergunte com qual o cliente prefere\)/);
 });
+
+test('aba Clientes lista quem só tem nome, agrupado, sem bloqueios; o disparo continua só com telefone', async () => {
+  const { mergeClients } = await import('../src/utils/clientDirectory.js');
+  const corte = [{ name: 'Corte Masculino', category: 'Cortes' }];
+  const bookings = [
+    { client: { name: 'Augusto Junior', phone: '' }, date: '2026-11-17', status: 'confirmed', totalPrice: 160, services: corte },
+    { client: { name: 'AUGUSTO  JUNIOR', phone: '' }, date: '2026-11-18', status: 'confirmed', totalPrice: 160, services: corte },
+    { client: { name: 'ALMOÇO', phone: '' }, date: '2026-11-18', status: 'confirmed', totalPrice: 0, services: [{ name: 'Bloqueio de horário', category: 'Bloqueio' }] },
+    { client: { name: 'Ana', phone: '(99) 98888-7777' }, date: '2026-11-18', status: 'confirmed', totalPrice: 280, services: corte },
+  ];
+  const all = mergeClients(bookings, [], { includeWithoutPhone: true });
+  assert.deepEqual(all.map((c) => [c.name, c.visits, Boolean(c.noPhone)]), [['AUGUSTO  JUNIOR', 2, true], ['Ana', 1, false]]);
+  assert.equal(all[0].phone, '');
+  assert.deepEqual(mergeClients(bookings, []).map((c) => c.name), ['Ana']);
+});

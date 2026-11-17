@@ -253,6 +253,7 @@ export async function updateBooking(id, patch) {
 
 export async function updateClientByPhone(phone, updates) {
   const digits = phone.replace(/\D/g, '');
+  if (digits.length < 8) throw new Error('Cliente sem WhatsApp: não é possível identificar os agendamentos.');
   if (supabase) {
     const patch = {};
     if (updates.name      !== undefined) patch.client_name      = updates.name;
@@ -273,8 +274,22 @@ export async function updateClientByPhone(phone, updates) {
   }));
 }
 
+// Preenche o WhatsApp de um cliente lançado só com o nome: vale para todos os agendamentos
+// desse nome que ainda estão sem telefone.
+export async function assignPhoneToName(name, phone, updates = {}) {
+  const clientName = String(name || '').trim();
+  if (!clientName || !supabase) throw new Error('Não foi possível salvar o WhatsApp.');
+  const patch = { client_phone: phone };
+  if (updates.name) patch.client_name = updates.name;
+  if (updates.email !== undefined) patch.client_email = updates.email || null;
+  if (updates.birthdate !== undefined) patch.client_birthdate = updates.birthdate || null;
+  const { error } = await supabase.from('bookings').update(patch).eq('client_name', clientName).eq('client_phone', '');
+  if (error) throw error;
+}
+
 export async function deleteClientByPhone(phone) {
   const digits = phone.replace(/\D/g, '');
+  if (digits.length < 8) throw new Error('Cliente sem WhatsApp: não é possível identificar os agendamentos.');
   if (supabase) {
     // Deleta diretamente no banco com filtro — sem buscar todos os registros
     const { error } = await supabase

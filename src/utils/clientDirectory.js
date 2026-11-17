@@ -2,18 +2,26 @@ const phoneDigits = (phone) => String(phone || '').replace(/\D/g, '');
 
 // Lista única de clientes: junta quem já agendou com o cadastro (aba Clientes, Vicky, cadastro manual).
 // O cadastro manda no nome, e-mail e nascimento; os agendamentos dão visitas, gasto e última visita.
-export function mergeClients(bookings = [], registered = []) {
+export const nameKey = (name) => String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+const isBlock = (b) => (b.services || []).some((service) => service?.category === 'Bloqueio');
+
+// includeWithoutPhone: também lista quem só tem nome (agendamento lançado sem WhatsApp), agrupado pelo nome,
+// para o telefone ser preenchido depois. Bloqueios de horário (almoço etc.) nunca viram cliente.
+export function mergeClients(bookings = [], registered = [], { includeWithoutPhone = false } = {}) {
   const map = new Map();
   bookings.forEach((b) => {
-    const phone = phoneDigits(b.client?.phone);
-    if (!phone) return;
+    const digits = phoneDigits(b.client?.phone);
+    if (!digits && (!includeWithoutPhone || isBlock(b) || !nameKey(b.client?.name))) return;
+    const phone = digits || `nome:${nameKey(b.client.name)}`;
     const existing = map.get(phone);
     const bDate = new Date(b.date);
     const counts = b.status !== 'cancelled';
     if (!existing) {
       map.set(phone, {
         name: b.client.name || '',
-        phone: b.client.phone || '',
+        phone: digits ? (b.client.phone || '') : '',
+        noPhone: !digits,
         email: b.client.email || '',
         birthdate: b.client.birthdate || '',
         visits: counts ? 1 : 0,
