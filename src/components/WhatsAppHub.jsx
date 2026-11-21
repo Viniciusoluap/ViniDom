@@ -3,6 +3,7 @@ import { Pencil, Check, X, RefreshCw, Send, Users, Wifi, WifiOff, Search, Smartp
 import { formatDateLong } from '../utils/dateFormatter';
 import { supabase } from '../lib/supabase';
 import WhatsAppConversations from './WhatsAppConversations';
+import YcloudPanel from './YcloudPanel';
 import { mergeClients } from '../utils/clientDirectory';
 import { loadClients } from '../utils/clientService';
 
@@ -70,6 +71,7 @@ export default function WhatsAppHub({ bookings }) {
   const [webStatusError, setWebStatusError] = useState('');
   const [webRetry, setWebRetry] = useState(0);
 
+  const [ycloud, setYcloud] = useState({ configured: false, ready: false, apiKeyPreview: '', hasWebhookSecret: false, phoneNumber: '', webhookUrl: '' });
   const [officialForm, setOfficialForm] = useState({ accessToken: '', phoneNumberId: '' });
   const [officialSaving, setOfficialSaving] = useState(false);
   const [officialMsg, setOfficialMsg] = useState('');
@@ -128,6 +130,7 @@ export default function WhatsAppHub({ bookings }) {
       if (ok) {
         setOfficial(data.official);
         setWeb(data.web);
+        if (data.ycloud) setYcloud(data.ycloud);
         if (data.agent) {
           setAgent(data.agent);
           setAgentInfo({ ownerPhone: data.agent.ownerPhone || '', address: data.agent.address || '', mapsUrl: data.agent.mapsUrl || '' });
@@ -394,7 +397,7 @@ export default function WhatsAppHub({ bookings }) {
       </div>
 
       {subTab === 'conversas' && (
-        <WhatsAppConversations connected={web.configured && webConn.status === 'connected'} />
+        <WhatsAppConversations connected={agent.channel === 'official' ? ycloud.ready : (web.configured && webConn.status === 'connected')} />
       )}
 
       {/* ── Atendimento automático (agente) ── */}
@@ -416,7 +419,7 @@ export default function WhatsAppHub({ bookings }) {
             Pagamento sempre no salão. Quando você responde uma conversa pelo celular, a Vicky sai dela por 12 horas.
           </p>
 
-          {web.configured && webConn.status !== 'connected' && (
+          {agent.channel !== 'official' && web.configured && webConn.status !== 'connected' && (
             <p className="text-xs text-amber-700">Conecte o WhatsApp Web (seção abaixo) para o agente começar a atender.</p>
           )}
 
@@ -518,12 +521,16 @@ export default function WhatsAppHub({ bookings }) {
       </section>
       )}
 
+      {subTab === 'api' && (
+        <YcloudPanel ycloud={ycloud} agentChannel={agent.channel || 'web'} authFetch={authFetch} onChanged={loadConfig} />
+      )}
+
       {/* ── Conexão: API Oficial ── */}
       {subTab === 'api' && (
       <section>
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-xs font-semibold text-brand-400 uppercase tracking-widest">
-            API Oficial (Meta Cloud API)
+            API Oficial direto na Meta (só disparo em massa)
           </h2>
           <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 ${official.configured ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
             {official.configured ? <Wifi size={10} /> : <WifiOff size={10} />}

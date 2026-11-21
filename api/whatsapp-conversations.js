@@ -1,6 +1,7 @@
 import { getAdminClient, parseBody, requireAdmin, sendJson } from '../src/server/supabaseServer.js';
 import { maskPhone, normalizePhoneDigits } from '../src/server/agentUtils.js';
-import { getWebConfig, logAgentMessage, pauseChat, sendViaService } from './_whatsapp.js';
+import { logAgentMessage, pauseChat } from './_whatsapp.js';
+import { channelReady, getChannel, sendMessages } from './_channel.js';
 import { removeMedia, signMediaUrls } from './_media.js';
 
 const LIST_DAYS = 60;
@@ -160,11 +161,14 @@ export default async function handler(req, res) {
       if (!text || text.length > MAX_TEXT) return sendJson(res, 400, { error: 'Mensagem vazia ou longa demais.' });
       const phoneDigits = chat.phoneDigits || (chat.chatJid.endsWith('@s.whatsapp.net') ? normalizePhoneDigits(chat.chatJid) : null);
       if (!phoneDigits) return sendJson(res, 400, { error: 'Este contato não tem número visível. Responda pelo celular.' });
-      const webConfig = await getWebConfig(supabase);
-      if (!webConfig) return sendJson(res, 503, { error: 'WhatsApp Web não configurado.' });
+      const channel = await getChannel(supabase);
+      if (!channelReady(channel)) return sendJson(res, 503, { error: 'WhatsApp não configurado.' });
 
-      const [result] = await sendViaService(webConfig, [{ phone: phoneDigits, message: text }]);
-      if (!result?.ok) return sendJson(res, 502, { error: result?.error || 'Falha ao enviar pelo WhatsApp.' });
+      const [result] = await sendMessages(channel, [{ phoneDigits, message: text }]);
+      if (!result?.ok) {
+        const hint = channel.type === 'official' ? ' Pela API Oficial, texto livre só é entregue a quem escreveu nas últimas 24 horas.' : '';
+        return sendJson(res, 502, { error: `${result?.error || 'Falha ao enviar pelo WhatsApp.'}${hint}` });
+      }
 
       await logAgentMessage(supabase, { chatJid: chat.chatJid, phoneDigits, role: 'assistant', source: 'human', content: text });
       // Você assumiu a conversa: o agente fica 12 horas sem responder esse cliente.

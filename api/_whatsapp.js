@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 
 // ownerPhone: número pessoal do Vinicius, que recebe os avisos quando um cliente pede atendimento humano.
 // O número conectado ao WhatsApp Web é o da Vicky, por isso o aviso não pode ir para ele.
-export const AGENT_DEFAULTS = { enabled: true, followups: true, ownerPhone: '99981162478', address: '', mapsUrl: '' };
+// channel: 'web' (WhatsApp Web pelo Railway) ou 'official' (API Oficial pela YCloud).
+export const AGENT_DEFAULTS = { enabled: true, followups: true, ownerPhone: '99981162478', address: '', mapsUrl: '', channel: 'web' };
 
 export async function readSetting(supabase, key) {
   const { data } = await supabase.from('integration_settings').select('value').eq('key', key).maybeSingle();
@@ -17,6 +18,7 @@ export async function getAgentSettings(supabase) {
     ownerPhone: stored.ownerPhone || AGENT_DEFAULTS.ownerPhone,
     address: stored.address || AGENT_DEFAULTS.address,
     mapsUrl: stored.mapsUrl || AGENT_DEFAULTS.mapsUrl,
+    channel: stored.channel === 'official' ? 'official' : 'web',
     apiKey: process.env.ANTHROPIC_API_KEY || stored.apiKey || '',
   };
 }

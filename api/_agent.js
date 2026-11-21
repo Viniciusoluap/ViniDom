@@ -7,7 +7,8 @@ import {
 } from '../src/server/agentUtils.js';
 import { createBookingRecord } from './bookings.js';
 import { deleteCalendarEvent, getCalendarBusySlots, getCalendarConfig, isCalendarConfigured } from './_calendar.js';
-import { AGENT_DEFAULTS, getWebConfig, pauseChat, sendViaService } from './_whatsapp.js';
+import { AGENT_DEFAULTS, pauseChat } from './_whatsapp.js';
+import { channelReady, getChannel, sendMessages } from './_channel.js';
 
 export const AGENT_MODEL = 'claude-haiku-5-5';
 const MAX_TOOL_ROUNDS = 6;
@@ -277,11 +278,18 @@ export async function executeTool(name, input, ctx) {
   if (name === 'chamar_vinicius') {
     await pauseChat(supabase, { chatJid: ctx.chatJid, phoneDigits: ctx.phoneDigits });
     const ownerDigits = normalizePhoneDigits(ctx.ownerPhone || AGENT_DEFAULTS.ownerPhone);
-    const webConfig = await getWebConfig(supabase);
-    if (webConfig && ownerDigits) {
+    const channel = await getChannel(supabase);
+    if (channelReady(channel) && ownerDigits) {
       const who = `${ctx.clientName || ctx.pushName || 'Cliente'} • ${maskPhone(ctx.phoneDigits) || ctx.chatJid}`;
+      const resumo = String(input.resumo || '').slice(0, 300);
       try {
-        await sendViaService(webConfig, [{ phone: ownerDigits, name: 'Vinicius', message: `🔔 Cliente pedindo atendimento\n${who}\n${String(input.resumo || '').slice(0, 300)}` }]);
+        const [result] = await sendMessages(channel, [{
+          phoneDigits: ownerDigits,
+          name: 'Vinicius',
+          message: `🔔 Cliente pedindo atendimento\n${who}\n${resumo}`,
+          template: { kind: 'aviso_equipe', values: [who, resumo] },
+        }]);
+        if (!result?.ok) console.error('[agent] Aviso ao Vinicius não enviado:', result?.error);
       } catch (error) {
         console.error('[agent] Falha ao avisar o Vinicius:', error.message);
       }
@@ -369,10 +377,12 @@ export async function buildContext(supabase, { phoneDigits, pushName, now = Date
   return { text: lines.join('\n'), clientName };
 }
 
-export async function loadHistory(supabase, { chatJid, phoneDigits, now = Date.now() }) {
+// beforeId: ignora mensagens a partir desse id (as que já estão sendo respondidas nesta rodada).
+export async function loadHistory(supabase, { chatJid, phoneDigits, now = Date.now(), beforeId = null }) {
   const since = new Date(now - 7 * 86400_000).toISOString();
   let query = supabase.from('agent_messages').select('role, content').gte('created_at', since);
   query = phoneDigits ? query.eq('phone_digits', phoneDigits) : query.eq('chat_jid', chatJid);
+  if (beforeId) query = query.lt('id', beforeId);
   const { data } = await query.order('created_at', { ascending: false }).limit(HISTORY_LIMIT);
   const history = (data || []).reverse().map((row) => ({ role: row.role, content: row.content }));
   if (history[0]?.role === 'assistant') history.unshift({ role: 'user', content: '(conversa iniciada pelo salão)' });
@@ -409,10 +419,10 @@ export function toWhatsAppFormat(text) {
 }
 
 // Roda uma rodada de atendimento e devolve o texto a enviar (ou null para não responder).
-export async function runAgent({ anthropic, supabase, chatJid, phoneDigits, pushName, text, settings = {}, now = Date.now() }) {
+export async function runAgent({ anthropic, supabase, chatJid, phoneDigits, pushName, text, settings = {}, now = Date.now(), historyBeforeId = null }) {
   const professionals = await listProfessionals(supabase);
   const context = await buildContext(supabase, { phoneDigits, pushName, now, settings, professionals });
-  const history = await loadHistory(supabase, { chatJid, phoneDigits, now });
+  const history = await loadHistory(supabase, { chatJid, phoneDigits, now, beforeId: historyBeforeId });
   const messages = [...history, { role: 'user', content: `${context.text}\n\n[Mensagem do cliente]\n${text}` }];
   const ctx = { supabase, chatJid, phoneDigits, pushName, clientName: context.clientName, now, professionals, ownerPhone: settings.ownerPhone };
 

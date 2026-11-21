@@ -27,6 +27,10 @@ export default async function handler(req, res) {
   if (!chatJid) return sendJson(res, 400, { error: 'Conversa inválida.' });
   const phoneDigits = normalizePhoneDigits(body.phone || (chatJid.endsWith('@s.whatsapp.net') ? chatJid : ''));
 
+  // Com a Vicky na API Oficial, as mensagens chegam pelo webhook da YCloud: aqui nada é registrado nem respondido,
+  // para a mesma mensagem não aparecer duas vezes se o WhatsApp Web ainda estiver conectado.
+  if ((await getAgentSettings(supabase)).channel === 'official') return sendJson(res, 200, { reply: null, channel: 'official' });
+
   // Alguém respondeu manualmente pelo celular: o agente sai da conversa por 12 horas.
   if (body.type === 'human_reply') {
     await pauseChat(supabase, { chatJid, phoneDigits });

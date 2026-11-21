@@ -1,7 +1,8 @@
 import { getAdminClient, sendJson } from '../src/server/supabaseServer.js';
 import { addDaysToKey, localNow } from '../src/server/agentUtils.js';
 import { planFollowups, QUIET_HOURS } from './_followups.js';
-import { getAgentSettings, getWebConfig, logAgentMessage, secretMatches, sendViaService } from './_whatsapp.js';
+import { getAgentSettings, logAgentMessage, secretMatches } from './_whatsapp.js';
+import { channelReady, getChannel, sendMessages } from './_channel.js';
 
 function authorized(req) {
   const header = req.headers.authorization || '';
@@ -19,8 +20,8 @@ export default async function handler(req, res) {
   const supabase = getAdminClient();
   if (!supabase) return sendJson(res, 503, { error: 'Servidor não configurado.' });
   const settings = await getAgentSettings(supabase);
-  const webConfig = await getWebConfig(supabase);
-  if (!settings.followups || !webConfig) return sendJson(res, 200, { skipped: true });
+  const channel = await getChannel(supabase, settings);
+  if (!settings.followups || !channelReady(channel)) return sendJson(res, 200, { skipped: true });
 
   const today = localNow().dateKey;
   const [bookingsResult, clientsResult, logResult] = await Promise.all([
@@ -60,7 +61,7 @@ export default async function handler(req, res) {
 
   let results = [];
   try {
-    results = await sendViaService(webConfig, toSend.map((item) => ({ phone: item.phoneDigits, message: item.message })));
+    results = await sendMessages(channel, toSend);
   } catch (error) {
     console.error('[agent-cron] Serviço do WhatsApp indisponível:', error.message);
   }
@@ -71,7 +72,7 @@ export default async function handler(req, res) {
       sent += 1;
       await logAgentMessage(supabase, { phoneDigits: item.phoneDigits, role: 'assistant', source: 'auto', content: item.message });
     } else {
-      // Libera para tentar de novo na próxima hora.
+      // Libera para tentar de novo na próxima execução.
       await supabase.from('agent_outbound_log').delete().eq('kind', item.kind).eq('ref', item.ref);
     }
   }

@@ -6,6 +6,9 @@
     },
     "api/agent-cron.js": {
       "maxDuration": 300
+    },
+    "api/ycloud-webhook.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
