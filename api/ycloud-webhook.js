@@ -219,7 +219,7 @@ export default async function handler(req, res) {
     return sendJson(res, 503, { error: 'Tente novamente.' });
   }
 
-  let later = null;
+  let later;
   try {
     later = await dispatchEvent(supabase, config, event);
   } catch (error) {
