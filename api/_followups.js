@@ -40,10 +40,12 @@ export function planFollowups({ bookings = [], clients = [], sentRefs = new Set(
   const yesterday = addDaysToKey(today, -1);
   const candidates = [];
   const ownerPhone = normalizePhoneDigits(BUSINESS_INFO.phone);
-  const add = (kind, ref, phoneDigits, message) => {
+  // values: variáveis do modelo aprovado pela Meta, usadas quando o envio é pela API Oficial.
+  const add = (kind, ref, phoneDigits, message, values) => {
     if (!phoneDigits || phoneDigits === ownerPhone || sentRefs.has(`${kind}:${ref}`)) return;
-    candidates.push({ kind, ref, phoneDigits, message });
+    candidates.push({ kind, ref, phoneDigits, message, template: { kind, values } });
   };
+  const who = (name) => name || 'tudo bem';
 
   const byPhone = new Map();
   for (const row of bookings) {
@@ -59,24 +61,24 @@ export function planFollowups({ bookings = [], clients = [], sentRefs = new Set(
     for (const row of rows) {
       const createdRecently = row.created_at && now - new Date(row.created_at).getTime() < 6 * 3600_000;
       if (row.date_key === tomorrow && !row.client_confirmed_at && !createdRecently) {
-        add('confirmacao', row.id, phone, MESSAGES.confirmacao(name, row));
+        add('confirmacao', row.id, phone, MESSAGES.confirmacao(name, row), [who(name), formatKeyShort(row.date_key), minutesToHHMM(row.time_slot), servicesLabel(row.services)]);
       }
       // Confirmação 1 hora antes (o cron roda a cada 15 min, então sai entre 60 e 45 min antes).
       const minutesUntil = row.time_slot - local.minutes;
       const bookedJustNow = row.created_at && now - new Date(row.created_at).getTime() < 90 * 60_000;
       if (row.date_key === today && minutesUntil > 0 && minutesUntil <= REMINDER_BEFORE_MIN && !bookedJustNow) {
-        add('lembrete_1h', row.id, phone, MESSAGES.lembrete_1h(name, row));
+        add('lembrete_1h', row.id, phone, MESSAGES.lembrete_1h(name, row), [who(name), minutesToHHMM(row.time_slot), servicesLabel(row.services)]);
       }
     }
     if (local.hour >= 10 && rows.some((row) => row.date_key === yesterday)) {
-      add('pos_atendimento', `${phone}:${yesterday}`, phone, MESSAGES.pos_atendimento(name));
+      add('pos_atendimento', `${phone}:${yesterday}`, phone, MESSAGES.pos_atendimento(name), [who(name)]);
     }
     const hasFuture = rows.some((row) => row.date_key >= today);
     const lastVisit = rows.map((row) => row.date_key).filter((key) => key < today).sort().pop();
     if (local.hour >= 10 && local.hour < 18 && !hasFuture && lastVisit) {
       const days = daysBetween(lastVisit, today);
       if (days >= RETURN_AFTER_DAYS && days <= RETURN_UNTIL_DAYS) {
-        add('retorno', `${phone}:${lastVisit}`, phone, MESSAGES.retorno(name, days));
+        add('retorno', `${phone}:${lastVisit}`, phone, MESSAGES.retorno(name, days), [who(name), String(days)]);
       }
     }
   }
@@ -84,7 +86,7 @@ export function planFollowups({ bookings = [], clients = [], sentRefs = new Set(
   const monthDay = `${String(local.month).padStart(2, '0')}-${String(local.day).padStart(2, '0')}`;
   for (const client of clients) {
     if (client.birthdate && String(client.birthdate).slice(5, 10) === monthDay) {
-      add('aniversario', `${client.phone_digits}:${local.year}`, client.phone_digits, MESSAGES.aniversario(firstName(client.name)));
+      add('aniversario', `${client.phone_digits}:${local.year}`, client.phone_digits, MESSAGES.aniversario(firstName(client.name)), [who(firstName(client.name))]);
     }
   }
 
