@@ -274,6 +274,30 @@ export async function updateClientByPhone(phone, updates) {
   }));
 }
 
+const comparablePhone = (value) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.startsWith('55') && (digits.length === 12 || digits.length === 13) ? digits.slice(2) : digits;
+};
+
+// Troca o WhatsApp em todos os agendamentos do cliente. Compara o número completo (com DDD),
+// para não alterar quem tem o mesmo número em outro DDD. Devolve quantos agendamentos mudaram.
+export async function changeBookingsPhone(oldPhone, newPhone) {
+  const oldDigits = comparablePhone(oldPhone);
+  if (oldDigits.length < 10 || !supabase) throw new Error('WhatsApp atual inválido.');
+  // O telefone pode estar gravado com máscara "(99) 98139-2210" ou só com números "5599981392210".
+  const found = [];
+  for (const pattern of [`%${phoneSuffix(oldDigits)}`, `%${oldDigits.slice(-8)}`]) {
+    const { data, error } = await supabase.from('bookings').select('id, client_phone').ilike('client_phone', pattern);
+    if (error) throw error;
+    found.push(...(data || []));
+  }
+  const ids = [...new Set(found.filter(row => comparablePhone(row.client_phone) === oldDigits).map(row => row.id))];
+  if (!ids.length) return 0;
+  const { error: updateError } = await supabase.from('bookings').update({ client_phone: newPhone }).in('id', ids);
+  if (updateError) throw updateError;
+  return ids.length;
+}
+
 // Preenche o WhatsApp de um cliente lançado só com o nome: vale para todos os agendamentos
 // desse nome que ainda estão sem telefone.
 export async function assignPhoneToName(name, phone, updates = {}) {

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pencil, Trash2, X, Check, Plus } from 'lucide-react';
 import { formatPrice, formatDate } from '../utils/dateFormatter';
-import { editClient, loadClients, phoneDigits, removeClient, saveClient } from '../utils/clientService';
+import { changeClientPhone, editClient, loadClients, phoneDigits, removeClient, saveClient } from '../utils/clientService';
 import ClientRegistration from './ClientRegistration';
 import { mergeClients } from '../utils/clientDirectory';
-import { assignPhoneToName } from '../utils/bookingService';
+import { assignPhoneToName, changeBookingsPhone } from '../utils/bookingService';
 import { validateName, validatePhone } from '../utils/validation';
 
 function formatPhone(value) {
@@ -41,7 +41,7 @@ export default function ClientsList({ bookings, onUpdate, onDelete, onReload, ca
     setFormError('');
     // Cliente lançado só com o nome: a edição serve para preencher o WhatsApp.
     setEditing(c.noPhone ? { noPhone: true, originalName: c.name } : c.phone);
-    setForm({ name: c.name, email: c.email, birthdate: c.birthdate, phone: '' });
+    setForm({ name: c.name, email: c.email, birthdate: c.birthdate, phone: c.noPhone ? '' : formatPhone(c.phone) });
   };
 
   const saveEdit = async () => {
@@ -61,10 +61,25 @@ export default function ClientsList({ bookings, onUpdate, onDelete, onReload, ca
         setEditing(null);
         return;
       }
+      let currentPhone = editing;
+      const newPhone = formatPhone(form.phone || '');
+      const phoneChanged = phoneDigits(newPhone) !== phoneDigits(editing);
+      if (phoneChanged) {
+        const message = validatePhone(form.phone || '');
+        if (message) throw new Error(message);
+        if (clients.some(c => !c.noPhone && phoneDigits(c.phone) === phoneDigits(newPhone))) {
+          throw new Error('Já existe um cliente com este WhatsApp. Edite o cadastro existente.');
+        }
+        if (!window.confirm(`Trocar o WhatsApp de ${formatPhone(editing)} para ${newPhone}? Os agendamentos e lembretes deste cliente passam para o número novo.`)) return;
+        if (registered.some(c => c.phone_digits === phoneDigits(editing))) await changeClientPhone(editing, newPhone);
+        await changeBookingsPhone(editing, newPhone);
+        currentPhone = newPhone;
+      }
       const isRegistered = registered.some(c => c.phone_digits === phoneDigits(editing));
-      if (isRegistered) await editClient(editing, form);
-      if (onUpdate) await onUpdate(editing, form);
+      if (isRegistered) await editClient(currentPhone, form);
+      if (onUpdate) await onUpdate(currentPhone, form);
       setRegistered(await loadClients());
+      if (phoneChanged && onReload) await onReload();
       setEditing(null);
     } catch (err) { setFormError(err.message || 'Não foi possível salvar.'); }
     finally { setSaving(false); }
@@ -102,20 +117,22 @@ export default function ClientsList({ bookings, onUpdate, onDelete, onReload, ca
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 />
               </div>
-              {editing.noPhone && (
-                <div>
+              <div>
                   <label className="text-xs font-semibold text-brand-400 uppercase tracking-widest block mb-1">WhatsApp</label>
                   <input
                     type="tel"
                     className="input-field"
                     placeholder="(99) 99999-9999"
-                    autoFocus
+                    autoFocus={Boolean(editing.noPhone)}
                     value={form.phone}
                     onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
                   />
-                  <p className="text-[11px] text-brand-300 mt-1">Vale para todos os agendamentos deste cliente que estão sem telefone.</p>
+                  <p className="text-[11px] text-brand-300 mt-1">
+                    {editing.noPhone
+                      ? 'Vale para todos os agendamentos deste cliente que estão sem telefone.'
+                      : 'Ao trocar o número, os agendamentos e lembretes deste cliente passam para o novo.'}
+                  </p>
                 </div>
-              )}
               <div>
                 <label className="text-xs font-semibold text-brand-400 uppercase tracking-widest block mb-1">E-mail</label>
                 <input

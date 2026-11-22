@@ -52,6 +52,20 @@ export async function editClient(phone, updates) {
   }
 }
 
+// Troca o WhatsApp do cadastro, mantendo o mesmo cliente (nome, nascimento, observações).
+export async function changeClientPhone(oldPhone, newPhone) {
+  const message = validatePhone(newPhone);
+  if (message) throw new Error(message);
+  const patch = { phone: newPhone.trim(), phone_digits: phoneDigits(newPhone), updated_at: new Date().toISOString() };
+  if (supabase) {
+    const { error } = await supabase.from('clients').update(patch).eq('phone_digits', phoneDigits(oldPhone));
+    if (error?.code === '23505') throw new Error('Já existe um cliente com este WhatsApp.');
+    if (error) throw error;
+  } else {
+    localStorage.setItem(KEY, JSON.stringify(localClients().map(c => c.phone_digits === phoneDigits(oldPhone) ? { ...c, ...patch } : c)));
+  }
+}
+
 export async function removeClient(phone) {
   const digits = phoneDigits(phone);
   if (supabase) {
