@@ -5,7 +5,7 @@ import { changeClientPhone, editClient, loadClients, phoneDigits, removeClient, 
 import ClientRegistration from './ClientRegistration';
 import { mergeClients } from '../utils/clientDirectory';
 import { assignPhoneToName, changeBookingsPhone } from '../utils/bookingService';
-import { validateName, validatePhone } from '../utils/validation';
+import { validateEmail, validateName, validatePhone } from '../utils/validation';
 
 function formatPhone(value) {
   const d = String(value || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
@@ -14,7 +14,8 @@ function formatPhone(value) {
   return value;
 }
 
-export default function ClientsList({ bookings, onUpdate, onDelete, onReload, canDelete = true }) {
+// canEditPhone: só o admin troca ou preenche WhatsApp, porque só ele altera os agendamentos de todos os profissionais.
+export default function ClientsList({ bookings, onUpdate, onDelete, onReload, canDelete = true, canEditPhone = false }) {
   const [editing, setEditing]   = useState(null);
   const [form, setForm]         = useState({});
   const [saving, setSaving]     = useState(false);
@@ -49,6 +50,7 @@ export default function ClientsList({ bookings, onUpdate, onDelete, onReload, ca
     setFormError('');
     try {
       if (editing?.noPhone) {
+        if (!canEditPhone) throw new Error('Só o administrador pode adicionar o WhatsApp.');
         const phone = formatPhone(form.phone);
         const message = validateName(form.name || '') || validatePhone(form.phone || '');
         if (message) throw new Error(message);
@@ -63,8 +65,11 @@ export default function ClientsList({ bookings, onUpdate, onDelete, onReload, ca
       }
       let currentPhone = editing;
       const newPhone = formatPhone(form.phone || '');
-      const phoneChanged = phoneDigits(newPhone) !== phoneDigits(editing);
+      const phoneChanged = canEditPhone && phoneDigits(newPhone) !== phoneDigits(editing);
       if (phoneChanged) {
+        // Confere o resto do formulário antes de mexer no número, para não trocar o telefone e depois falhar.
+        const invalid = validateName(form.name || '') || validateEmail(form.email || '');
+        if (invalid) throw new Error(invalid);
         const message = validatePhone(form.phone || '');
         if (message) throw new Error(message);
         if (clients.some(c => !c.noPhone && phoneDigits(c.phone) === phoneDigits(newPhone))) {
@@ -117,7 +122,7 @@ export default function ClientsList({ bookings, onUpdate, onDelete, onReload, ca
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 />
               </div>
-              <div>
+              {canEditPhone && (<div>
                   <label className="text-xs font-semibold text-brand-400 uppercase tracking-widest block mb-1">WhatsApp</label>
                   <input
                     type="tel"
@@ -132,7 +137,7 @@ export default function ClientsList({ bookings, onUpdate, onDelete, onReload, ca
                       ? 'Vale para todos os agendamentos deste cliente que estão sem telefone.'
                       : 'Ao trocar o número, os agendamentos e lembretes deste cliente passam para o novo.'}
                   </p>
-                </div>
+                </div>)}
               <div>
                 <label className="text-xs font-semibold text-brand-400 uppercase tracking-widest block mb-1">E-mail</label>
                 <input
@@ -200,7 +205,9 @@ export default function ClientsList({ bookings, onUpdate, onDelete, onReload, ca
               <tr key={c.phone || `nome:${c.name}`} className={`border-b border-brand-50 hover:bg-warm-50 transition-colors ${i % 2 !== 0 ? 'bg-warm-50/40' : ''}`}>
                 <td className="px-4 py-3 font-semibold text-brand-900">{c.name || '—'}</td>
                 <td className="px-4 py-3 text-brand-500">
-                  {c.noPhone ? (
+                  {c.noPhone && !canEditPhone ? (
+                    <span className="text-xs text-brand-300">Sem WhatsApp</span>
+                  ) : c.noPhone ? (
                     <button type="button" onClick={() => startEdit(c)} className="text-xs text-amber-700 underline hover:text-brand-900">
                       Adicionar WhatsApp
                     </button>
@@ -222,13 +229,13 @@ export default function ClientsList({ bookings, onUpdate, onDelete, onReload, ca
                 <td className="px-4 py-3 text-right font-semibold text-brand-900">{formatPrice(c.totalSpent)}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1">
-                    <button
+                    {(canEditPhone || !c.noPhone) && <button
                       onClick={() => startEdit(c)}
                       title="Editar"
                       className="p-1.5 text-brand-300 hover:text-brand-900 transition-colors"
                     >
                       <Pencil size={14} />
-                    </button>
+                    </button>}
                     {canDelete && !c.noPhone && <button
                       onClick={() => handleDelete(c)}
                       title="Excluir"

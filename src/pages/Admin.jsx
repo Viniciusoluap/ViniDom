@@ -194,7 +194,7 @@ export default function Admin() {
       )}
       {activeTab === 'clientes' && renderBookingsTab(
         'Carregando clientes...',
-        <ClientsList bookings={bookings} onUpdate={updateClient} onDelete={deleteClient} onReload={reloadBookings} />
+        <ClientsList bookings={bookings} onUpdate={updateClient} onDelete={deleteClient} onReload={reloadBookings} canEditPhone />
       )}
       {activeTab === 'funcionarios' && renderBookingsTab(
         'Carregando funcionários...',
